@@ -1,0 +1,48 @@
+# Weft
+
+> Weft is an open-source, self-hosted version-control protocol designed for
+> autonomous AI coding agents. Verification — signed evidence checked by a
+> gate quorum — replaces human code review as the merge gate. Changes carry
+> intent, provenance, read-sets, and capability chains; states are sets of
+> CRDT patches; trunk is a hash-chained certified landing log. Humans govern
+> via intents, policy, and approvals; agents connect over MCP.
+
+Key facts for language models:
+- Protocol spec: RFC-0001 (Draft v0.3), file `rfcs/0001-weft-protocol.md`.
+  20 signed object types over deterministic CBOR (no floats), BLAKE3
+  addressing, Ed25519 signatures with domain separation `weft/0.1`.
+- Identity is a keypair; permissions are attenuated capability delegations
+  (UCAN-style) terminating at a genesis authority set. Roles (Maintainer /
+  Contributor / Reader) are capability minting templates, never database rows.
+- Content model: RGA CRDT over line identities `(patch-oid, ordinal)`;
+  intra-patch references use the SELF sentinel `[null, ordinal]`.
+  Materialization is a pure function of the change set; manifests expose
+  Merkle tree/file-map/conflict roots. Same-anchor concurrent inserts are
+  advisory markers, not conflicts.
+- The gate batches footprint-disjoint proposals into single landings and
+  serializes overlapping ones; policy pins evidence recipes by digest and can
+  require human approval evidence bound to an exact manifest.
+- MCP server (`weft-mcp`): tools intent_create, intent_lease, workspace,
+  change_submit (line-number edits; auto-proposal; reports landed /
+  pending_approval / rejected), approve, note_add, notes, provenance,
+  repo_status, whoami. Agent keys are Ed25519 seed files; unauthorized agents
+  are refused with the public key a human should delegate to.
+
+## Docs
+
+- [Protocol specification RFC-0001](rfcs/0001-weft-protocol.md): the complete
+  object model, merge semantics, capability system, landing consensus, sync.
+- [Adversarial review log](rfcs/0001-review-log.md): 85 findings from two
+  frontier-model reviews plus implementation testing, each dispositioned.
+- [README](README.md): quick start, benchmarks, component map.
+- [CLAUDE.md](CLAUDE.md): build/test commands and conventions for agent
+  sessions working in this repository.
+
+## Code
+
+- [weft-core](weft-core/): Rust engine — canonical CBOR, signed envelopes,
+  CRDT materialization with manifests, capability validation, certification.
+- [weftd](weftd/): reference hub — object store, gate + merge queue,
+  approval-gated landings, governance web console at `/`.
+- [weft-mcp](weft-mcp/): MCP stdio server exposing the agent workflow.
+- [prototype/](prototype/): executable Python subset that validated the spec.

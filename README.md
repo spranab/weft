@@ -1,126 +1,126 @@
-# agchub
+# Weft — version control for AI agents
 
-**Home of Weft — a version-control protocol and self-hosted hub built for the
-agentic world.**
+[![CI](https://github.com/spranab/agchub/actions/workflows/ci.yml/badge.svg)](https://github.com/spranab/agchub/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Spec](https://img.shields.io/badge/RFC--0001-v0.3-d9a441.svg)](rfcs/0001-weft-protocol.md)
+
+**Weft is an open-source, self-hosted version control protocol built for
+autonomous coding agents — where verification, not human code review, is the
+merge gate.** Git was created for Linux and human patch flow; Weft is created
+for the agentic world: swarms of AI agents (Claude, GPT, Qwen, or yours)
+working one repository concurrently, merging continuously, with every change
+carrying signed provenance, machine-checkable intent, and evidence.
 
 The name is the mechanism: a loom holds the *warp* under tension while the
 *weft* is woven across it, one pick at a time. Weft's certified landing log is
 the warp; every agent's change is weft beaten into fabric by a verification
 gate. Swarms of threads, one cloth.
 
-Git was created for Linux — one brutally demanding human workflow, generalized later.
-agchub is created for the workflow that git is bad at: **N autonomous agents working the
-same repository concurrently, merging continuously, with verification — not human
-review — as the gate.**
+## Why not just git + GitHub?
 
-## Status
+Everything git and forges layered on top of it assumes **human attention is
+the scarce resource**: prose commits, PRs batched for human eyes, identity as
+a config string, permissions in a forge database that doesn't replicate.
+Agents break every one of those assumptions.
 
-**Design phase — RFC-0001 at Draft v0.2.** The spec was drafted by Claude
-Fable 5, then hardened through independent adversarial review by GPT-5.6-sol
-and Qwen 3.8 Max (77 findings, all dispositioned):
-
-- [RFC-0001: The Weft Protocol](rfcs/0001-weft-protocol.md) — object model,
-  identity & capabilities, RGA content model with verifiable materialization
-  manifests, quorum-certified landing log, evidence-gated policy, sync, agent
-  interface, git bridge.
-- [Review log](rfcs/0001-review-log.md) — every finding from both reviews with
-  its disposition (accept / modify / defer / reject), plus the
-  implementation-testing findings below.
-
-## Prototype (it runs)
-
-[prototype/](prototype/) is an executable subset of the RFC — real
-deterministic CBOR, real Ed25519, the RGA materialization engine with
-manifests, capability chains, and a live gate with a merge queue:
-
-- `weft_core.py` — the protocol engine
-- `weft_fuzz.py` — **0/300 determinism violations** across 8 shuffled orders
-  per scenario, identical on Windows and Linux; targeted convergence tests
-  all pass
-- `weftd.py` + `swarm_demo.py` — three concurrent agents (run from Windows)
-  work one repo through a certified gate (run in WSL Ubuntu): the gate
-  batched disjoint work, serialized overlapping work, flagged the same-anchor
-  append race with an order marker, caught a stale read, executed the pinned
-  evidence recipe in a sandbox, and certified three landings — then a
-  Windows light client re-materialized the Linux gate's state to **identical
-  manifest roots** and walked one line's provenance back to the authority
-  key. `3/3 workers landed`.
-
-Building it surfaced six spec defects the two model reviews missed (findings
-W1–W6 in the review log) — all fixed in RFC v0.3. The spec has now survived
-three kinds of adversary: two frontier models, and the compiler.
-
-## What's different from git
-
-| Git | Weft |
+| git / forges | Weft |
 |---|---|
-| Commit = snapshot + prose message | Change = operations + intent + provenance + evidence |
-| Identity = `user.email` config string | Identity = keypair; every object signed; capabilities are delegated and revocable |
-| Merge = line-based 3-way text merge | Merge = commutation over line-identity; validity = evidence passing post-merge |
-| Issues/CI/review live in a forge's database | Intents, evidence, and policy are protocol objects that replicate with the repo |
-| History = ordered branch of commits | State = an unordered *set* of changes; cherry-pick is free |
-| Humans are the actors | Agents are first-class; humans approve intents, not lines |
+| Commit = snapshot + prose message | Change = operations + intent + provenance + read-set + evidence |
+| Identity = `user.email` string | Identity = Ed25519 keypair; every object signed; capabilities delegated, scoped, expiring, revocable |
+| Merge = line-based 3-way text merge, human-reviewed | Merge = CRDT line-identity commutation; validity = evidence passing, certified by a gate quorum |
+| Issues / CI / review live in a forge's database | Intents, evidence, policy, and approvals are protocol objects that replicate with the repo |
+| History = ordered branch of commits | State = a *set* of changes (cherry-pick is free); trunk = a hash-chained certified landing log |
+| Permissions = rows an admin can bypass | Unauthorized writes are *unrepresentable* — every object carries a capability chain to the authority key |
 
-## Planned components
+## Try it in 60 seconds
 
-1. `rfcs/` — the protocol spec (the product, in a protocol project) ✅
-2. [`weft-core/`](weft-core/) — the Rust engine: canonical CBOR, BLAKE3 +
-   Ed25519 signed objects, RGA materialization with manifests, capability
-   chains, the landing checklist. **9/9 tests green on Windows and Linux**,
-   including the determinism fuzzer (200 scenarios × 6 permutations) and
-   regression tests for every implementation finding. 🚧 next: sync + gate
-   daemon
-3. [`weftd/`](weftd/) — reference hub: object store, trunk gate with merge
-   queue (batches footprint-disjoint proposals, serializes overlapping ones),
-   sandboxed evidence execution, certified landings, **approval-gated
-   landings** (policy `approvals: n` parks batches until humans sign),
-   revocation-aware capability validation, and a full **governance console**
-   at `GET /` — browser-held Ed25519 identity (WebCrypto; the private key
-   never leaves the page), create-repository genesis flow, intent minting,
-   role console (Maintainer/Contributor/Reader as capability templates),
-   revoke buttons, approve-and-sign, provenance drill-down with key→name
-   resolution. All browser mutations flow through `/prepare` → sign →
-   `/submit`; the server canonicalizes and hashes, the browser only signs.
-   Two integration tests: a 3-worker HTTP swarm with light-client
-   verification, and the human-in-the-loop e2e (genesis → delegation →
-   pending approval → signed approval → landing; revoked capability →
-   rejection). 🚧 next: sync frames (§8), multi-gate quorums, MCP server
-4. [`weft-mcp/`](weft-mcp/) — **the agent's door** (RFC §9): an MCP stdio
-   server holding an Ed25519 agent key. Agents lease intents, read numbered
-   workspaces, and `change_submit` does the position→identity translation —
-   agents never see line-IDs. The server discovers its own capabilities from
-   the hub; with none delegated it refuses helpfully with the key a human
-   should authorize in the console. `.mcp.json` wires it into any Claude Code
-   session in this repo. E2e-tested: initialize → refused → capability
-   minted → intent → change landed → intent closed → provenance to root.
-5. `weft` — CLI porcelain for humans
-4. MCP server — the *primary* agent interface, first-class before any web UI
-5. Git bridge — two-way mirror so agchub repos keep a GitHub front door
+```bash
+git clone https://github.com/spranab/agchub && cd agchub
+cargo run --release -p weftd            # the hub + gate, port 8747
+# open http://localhost:8747  →  Access tab → Generate key → Create repository
+```
+
+You are now the authority root of a Weft repo. Mint a role (Maintainer /
+Contributor / Reader — roles are just capability templates), create an
+intent, and watch agent work land through the approval gate you control.
+
+## For AI agents (MCP)
+
+Weft ships an [MCP server](weft-mcp/) — agents connect over the Model Context
+Protocol and get the full workflow: `intent_create`, `intent_lease`,
+`workspace` (numbered lines — agents never see internal line-IDs),
+`change_submit` (edit by line number → signed change → proposal → reports
+landed / pending-approval / rejected), `approve`, `note_add` / `notes` (the
+repo's durable memory), and `provenance` (walk any change to its authority
+root).
+
+```jsonc
+// .mcp.json (ships in this repo — Claude Code picks it up automatically)
+{ "mcpServers": { "weft": {
+    "command": "cargo", "args": ["run", "--quiet", "--release", "-p", "weft-mcp"],
+    "env": { "WEFT_HUB": "http://127.0.0.1:8747" } } } }
+```
+
+The agent generates its own Ed25519 key on first run. Until a human delegates
+it a capability in the console, every write is refused with the public key to
+authorize — the delegation loop between the human UI and the agent door is
+the product. Agent onboarding docs: [CLAUDE.md](CLAUDE.md) · [llms.txt](llms.txt).
+
+## How it works
+
+1. **Objects** — 20 content-addressed, Ed25519-signed types over deterministic
+   CBOR (BLAKE3 addressing): changes, patches, states, manifests, intents,
+   capabilities, evidence, policy, landings, certificates…
+   [RFC-0001](rfcs/0001-weft-protocol.md) is the source of truth.
+2. **Content model** — an RGA-family CRDT over line identities. Materialization
+   is a pure function of the change *set*, byte-identical on every node, with
+   a Merkle **manifest** making tree, file-map, and conflict roots verifiable.
+3. **The gate** — proposals queue; footprint-disjoint work batches into one
+   landing (one evidence run for N changes); overlapping work serializes.
+   Policy pins evidence recipes by digest, demands attestor trust roots, and
+   can require human approvals — minted as signed evidence from a browser key.
+4. **Governance console** — served by the daemon at `/`: landing log,
+   provenance drill-down, intent board, role console, policy view. The UI
+   renders the capability graph; it never owns a users/roles database.
 
 ## Benchmarks
 
-`cargo run --release -p weftd --example bench` — four numbers that decide
-whether the protocol survives its design-center workload. On a 32-core
-Windows dev machine (in-memory store, evidence execution excluded):
+`cargo run --release -p weftd --example bench` (32-core dev machine,
+in-memory store, evidence execution excluded):
 
 | Bench | Result | What it measures |
 |---|---|---|
-| B1 object ingest | **~27,000 obj/s** | canonical decode + Ed25519 verify + store (crypto-bound) |
-| B2 materialize 5,000 concurrent changes | **10.4 ms** (~480k changes/s) | the RGA engine hot path |
-| B3 gate, disjoint work | **~55,000 chg/s** — 500 proposals → **1 landing** | §7.5 batching: disjoint work amortizes to one certification |
-| B4 gate, contended file | **~975 chg/s** — 300 appends → 301 landings | worst case: every landing is a full certify cycle (~1 ms each) |
+| Object ingest | **~27,000 obj/s** | canonical decode + Ed25519 verify + store |
+| Materialize 5,000 concurrent changes | **10.4 ms** | the CRDT engine hot path |
+| Gate, disjoint work | **~55,000 chg/s** — 500 proposals → **1 landing** | batching amortizes verification |
+| Gate, contended file | **~975 chg/s**, fully serialized | ~1 ms per certified landing |
 
-Reading them honestly: the engine is not the bottleneck and never will be —
-real-world throughput is dominated by **evidence execution** (your test
-suite's runtime), which is exactly what B3's batching amortizes. B4 says a
-fully-serialized, cryptographically-certified landing costs ~1 ms of
-protocol overhead; git's equivalent (commit + merge + push, no
-verification) is the same order of magnitude. What is *not* yet measured:
-HTTP/sync overhead at swarm scale, disk-backed storage, and
-10⁶-change repos (the delta-form state and v0.2 Merkle roadmap exist for
-that).
+The engine is not the bottleneck: real throughput is dominated by evidence
+execution (your test suite), which is exactly what batching amortizes.
+
+## Project status
+
+Working, tested, pre-1.0. The spec survived four kinds of adversary — two
+frontier models (77 findings), an executable prototype (7 more), and CI — all
+[dispositioned in the review log](rfcs/0001-review-log.md).
+
+| Component | State |
+|---|---|
+| [RFC-0001 spec](rfcs/0001-weft-protocol.md) (v0.3) + [review log](rfcs/0001-review-log.md) | ✅ |
+| [`weft-core`](weft-core/) — engine: CBOR, signatures, CRDT + manifests, capabilities, certification | ✅ fuzzed, 9 tests |
+| [`weftd`](weftd/) — hub: gate + merge queue, approval-gated landings, governance console | ✅ 2 e2e suites |
+| [`weft-mcp`](weft-mcp/) — agent door over MCP | ✅ e2e-tested |
+| [`prototype/`](prototype/) — original Python executable spec | ✅ kept as reference |
+| `weft` CLI · multi-node sync (§8) · multi-gate quorums · git bridge | 🚧 roadmap |
+
+## Keywords
+
+Version control for AI agents · agentic coding · autonomous software
+development · git alternative for agents · multi-agent collaboration · MCP
+server · Model Context Protocol · CRDT merge · capability-based permissions ·
+self-hosted forge · evidence-gated merging · AI code review · provenance.
 
 ## License
 
 MIT (see [LICENSE](LICENSE)). Dual MIT/Apache-2.0 will be considered before
-the first public release for the patent-grant benefit.
+the first tagged release.
