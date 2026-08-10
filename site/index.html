@@ -83,6 +83,10 @@
   .term .r { color: var(--bad); }
   .term .a { color: var(--accent); }
 
+  .uc-today { color: var(--faint); font-size: .85rem; margin-bottom: .5rem;
+    padding-left: .7rem; border-left: 2px solid var(--line); }
+  #uses .card p b { color: var(--accent); font-weight: 650; }
+
   .faq details { background: var(--bg1); border: 1px solid var(--line);
     border-radius: 12px; margin: .65rem 0; overflow: hidden; }
   .faq summary { cursor: pointer; padding: 1rem 1.3rem; font-weight: 650;
@@ -117,6 +121,7 @@
   <span class="brand">🧵 <span>weft</span></span>
   <span class="spacer"></span>
   <a href="https://demo.weftgate.com">Live demo</a>
+  <a href="#uses">Use cases</a>
   <a href="#faq">Why not…?</a>
   <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-weft-protocol.md">RFC-0001</a>
   <a href="https://github.com/spranab/weft">GitHub</a>
@@ -383,6 +388,72 @@
       agent connects over the Model Context Protocol: lease intents, edit by
       line number, land through the gate. Refusals name the key a human
       should authorize.</p></div>
+  </div>
+</section>
+
+<section id="uses">
+  <h2>Where it changes the work</h2>
+  <p class="lead">Six situations, no hypotheticals — every claim below maps to
+  a shipped feature you can run.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>The overnight swarm</h3>
+      <p class="uc-today">Today: you launch agents at midnight and wake to
+      thirty branches, a wall of PR tabs, and merge conflicts. You are the
+      bottleneck to your own tools.</p>
+      <p><b>With Weft:</b> you wake to a certified ledger. Everything landed
+      passed your pinned checks; everything rejected names its reason —
+      stale read, failed evidence, revoked key. Mornings start with reading
+      the log, not triaging branches.</p>
+    </div>
+    <div class="card">
+      <h3>AI in a real engineering org</h3>
+      <p class="uc-today">Today: agents share a bot account with an org-wide
+      token, and “who approved this AI change?” has no good answer.</p>
+      <p><b>With Weft:</b> each agent holds a scoped, <em>expiring</em>
+      capability; every line traces model → delegation → authority key;
+      revocation is instant while certified history stays valid. An AI
+      adoption story your security team can actually sign.</p>
+    </div>
+    <div class="card">
+      <h3>The maintainer under AI-PR flood</h3>
+      <p class="uc-today">Today: every low-effort AI pull request costs your
+      attention just to close. The flood taxes exactly the resource it
+      ignores.</p>
+      <p><b>With Weft:</b> contributions — human or agent — must pass your
+      pinned suite and policy <em>before</em> they earn eyes; the bridge
+      returns clean, provenance-trailed commits to GitHub. Your attention is
+      spent only on work that already proved itself.</p>
+    </div>
+    <div class="card">
+      <h3>Docs that stay true</h3>
+      <p class="uc-today">Today: handbooks and runbooks rot, and once agents
+      help write them, nobody knows which model wrote what or why to trust
+      it.</p>
+      <p><b>With Weft:</b> agents propose sections, a doc-linter gates
+      structure and links, and an editor — human or model — attests as a
+      judge with its own key. Runnable now:
+      <span class="mono">--example docs</span>. Every paragraph has
+      provenance.</p>
+    </div>
+    <div class="card">
+      <h3>Change control that audits itself</h3>
+      <p class="uc-today">Today: audit season means weeks of screenshots,
+      tickets, and reconstructed timelines.</p>
+      <p><b>With Weft:</b> the hash-chained, signed landing log <em>is</em>
+      the change record — and auditors don't take your word: they run a
+      verify-don't-trust replica (<span class="mono">--follow</span>) that
+      re-derives the whole chain itself. Audit prep becomes a URL.</p>
+    </div>
+    <div class="card">
+      <h3>Evals with receipts</h3>
+      <p class="uc-today">Today: a score lives in a spreadsheet, unlinked
+      from the exact artifact version that earned it.</p>
+      <p><b>With Weft:</b> evidence binds to a Merkle manifest of exact
+      bytes, and judges sign from distinct trust roots. “Which version
+      scored 84%?” stops being archaeology and becomes a cryptographic
+      lookup.</p>
+    </div>
   </div>
 </section>
 
