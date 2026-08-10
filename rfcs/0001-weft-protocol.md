@@ -871,6 +871,17 @@ Review assignment, notification routing, and escalation are subscription
 consumers in the reference UI, deliberately not protocol objects. A
 traditional diff view exists; it is not the home page.
 
+**Roles are capability templates, not a second permission system.** The UI
+MUST NOT keep its own users/roles database — that would resurrect the
+forge-database disease this protocol exists to cure. A forge-style role is
+nothing but a named minting template: *Maintainer* =
+`{approve, delegate, create_intent, policy}` on `**`; *Contributor* =
+`{publish_change, propose}` on scoped paths; *Reader* = `{read}`. Assigning a
+role mints a capability; changing one is revocation + fresh delegation with a
+signed audit trail; "who can do what" is always answerable from repo objects
+alone, and humans and agents are governed by the identical mechanism. The UI
+renders the capability graph; it never owns it.
+
 ## 12. Security considerations
 
 ### 12.1 Instruction and execution provenance

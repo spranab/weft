@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>weftd — governance</title>
+<style>
+  :root {
+    --bg: #101418; --panel: #171d24; --line: #26303a; --text: #d6dde4;
+    --dim: #7d8b98; --accent: #d9a441; --ok: #5fb281; --bad: #cf6a6a;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.55 var(--mono); padding: 1.2rem; }
+  h1 { font-size: 1.05rem; letter-spacing: .04em; }
+  h1 .thread { color: var(--accent); }
+  h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin-bottom: .6rem; }
+  header { display: flex; gap: 1.4rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 1.1rem; }
+  header .stat b { color: var(--accent); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: minmax(0,3fr) minmax(0,2fr); gap: 1rem; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem; margin-bottom: 1rem; overflow-x: auto; }
+  .landing { border-left: 3px solid var(--accent); padding: .45rem .7rem; margin: .5rem 0; background: rgba(217,164,65,.05); }
+  .landing .seq { color: var(--accent); }
+  .chg { cursor: pointer; padding: .1rem 0 .1rem 1rem; }
+  .chg:hover { color: var(--accent); }
+  .chg .model { color: var(--ok); }
+  .chg .model.human { color: var(--dim); }
+  .oid { color: var(--dim); }
+  .warn { color: var(--bad); padding-left: 1rem; font-size: .85em; }
+  pre.file { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .6rem .8rem; margin: .4rem 0 1rem; overflow-x: auto; }
+  .cap { border-left: 2px solid var(--line); margin: .35rem 0 .35rem .4rem; padding: .25rem .7rem; }
+  .cap.root { border-left-color: var(--ok); }
+  .cap .who { color: var(--text); }
+  .cap .scope { color: var(--dim); font-size: .85em; }
+  .badge { display: inline-block; border: 1px solid var(--ok); color: var(--ok); border-radius: 4px; font-size: .7em; padding: 0 .35em; letter-spacing: .06em; }
+  .empty { color: var(--dim); font-style: italic; }
+  footer { color: var(--dim); font-size: .8em; margin-top: .5rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="thread">🧵 weft</span> / governance</h1>
+  <span class="stat">trunk seq <b id="seq">–</b></span>
+  <span class="stat">queued <b id="queued">–</b></span>
+  <span class="stat" id="gate"></span>
+</header>
+<div class="grid">
+  <div>
+    <section>
+      <h2>Certified landing log</h2>
+      <div id="log" class="empty">no landings yet</div>
+    </section>
+    <section>
+      <h2>Workspace (head)</h2>
+      <div id="ws" class="empty">empty</div>
+    </section>
+  </div>
+  <div>
+    <section>
+      <h2>Provenance <span class="oid" id="prov-target"></span></h2>
+      <div id="prov" class="empty">click a change to walk its capability chain
+        to the authority root</div>
+    </section>
+    <section>
+      <h2>Rejections</h2>
+      <div id="rejects" class="empty">none</div>
+    </section>
+  </div>
+</div>
+<footer>read-only surface — every mutation below this UI requires a signed
+capability chain; the UI renders the graph, it never owns it (RFC-0001 §11)</footer>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+async function j(path) { return (await fetch(path)).json(); }
+
+async function refresh() {
+  const heads = await j("/heads");
+  $("seq").textContent = heads.seq;
+  const log = await j("/log");
+  $("queued").textContent = log.queued;
+  if (log.log.length) {
+    $("log").classList.remove("empty");
+    $("log").innerHTML = log.log.slice().reverse().map(e => `
+      <div class="landing">
+        <div><span class="seq">seq ${e.seq}</span>
+          <span class="oid">lnd_${e.landing.slice(0,10)}…</span>
+          ${e.markers ? `· ${e.markers} order marker(s)` : ""}</div>
+        ${e.changes.map(c => `
+          <div class="chg" onclick="prov('${c.oid}')">
+            <span class="oid">chg_${c.oid.slice(0,10)}…</span>
+            <span class="model ${c.model === "none" ? "human" : ""}">${esc(
+              c.model === "none" ? "human/authority" : c.model)}</span>
+            “${esc(c.message)}”</div>`).join("")}
+        ${e.warnings.map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join("")}
+      </div>`).join("");
+  }
+  if (log.rejects.length) {
+    $("rejects").classList.remove("empty");
+    $("rejects").innerHTML = log.rejects.map(r =>
+      `<div class="warn">${esc(JSON.stringify(r))}</div>`).join("");
+  }
+  const ws = await j("/workspace");
+  const files = Object.entries(ws.files);
+  if (files.length) {
+    $("ws").classList.remove("empty");
+    $("ws").innerHTML = files.map(([path, f]) =>
+      `<div><span class="oid">${esc(path)}</span> · ${f.line_ids.length} line(s)</div>
+       <pre class="file">${esc(f.content)}</pre>`).join("");
+  }
+}
+
+async function prov(oid) {
+  $("prov-target").textContent = `chg_${oid.slice(0, 10)}…`;
+  const p = await j(`/provenance/${oid}`);
+  $("prov").classList.remove("empty");
+  $("prov").innerHTML = `
+    <div>model <span class="model">${esc(p.model)}</span> ·
+      key <span class="oid">${p.author.slice(0, 12)}…</span></div>
+    <div class="oid">footprint ${esc(JSON.stringify(p.footprint))}</div>
+    ${p.chain.map(c => `
+      <div class="cap ${c.root ? "root" : ""}">
+        <div class="who">cap_${c.oid.slice(0, 10)}… ${c.root
+          ? '<span class="badge">AUTHORITY ROOT</span>' : ""}</div>
+        <div class="scope">issuer ${c.issuer.slice(0, 12)}… →
+          audience ${c.audience.slice(0, 12)}…</div>
+        <div class="scope">actions ${esc(c.actions.join(", "))} ·
+          paths ${esc(c.paths.join(", "))}</div>
+      </div>`).join("")}`;
+}
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

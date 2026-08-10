@@ -244,6 +244,17 @@ fn swarm_through_certified_gate() {
         assert!(ws.contains(&format!("quote from {model}")), "missing {model}");
     }
 
+    // --- governance UI + provenance endpoint (RFC §11) -------------------
+    let (code, page) = http("GET", "/", b"");
+    assert_eq!(code, 200);
+    assert!(String::from_utf8_lossy(&page).contains("governance"));
+    let log = get_json("/log");
+    let chg_hex = jfield(&log, "oid").to_string();     // first landed change
+    let prov = get_json(&format!("/provenance/{chg_hex}"));
+    assert!(prov.contains("\"root\":true"),
+            "chain must terminate at the authority root: {prov}");
+    assert!(prov.contains("publish_change"));
+
     // --- light-client verification (RFC §7.4) ---------------------------
     let heads = get_json("/heads");
     let landing: Oid = from_hex(jfield(&heads, "landing")).try_into().unwrap();

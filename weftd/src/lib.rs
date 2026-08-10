@@ -29,12 +29,62 @@ pub struct Hub {
 
 pub type Shared = Arc<Mutex<Hub>>;
 
+const DASHBOARD: &str = include_str!("dashboard.html");
+
 pub fn now_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
 }
 
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+fn parse_oid(hexstr: &str) -> Option<Oid> {
+    if hexstr.len() != 64 {
+        return None;
+    }
+    let bytes: Result<Vec<u8>, _> = (0..64).step_by(2)
+        .map(|i| u8::from_str_radix(&hexstr[i..i + 2], 16)).collect();
+    bytes.ok()?.try_into().ok()
+}
+
+/// Walk a change's capability chain to the root; JSON for the UI (RFC §11:
+/// the UI renders the capability graph, it never owns it).
+fn provenance_json(hub: &Hub, oid: &Oid) -> Option<String> {
+    let env = hub.store.env.get(oid)?;
+    if env.get("type").and_then(V::text) != Some("change") {
+        return None;
+    }
+    let b = env.get("body")?;
+    let model = b.get("provenance").and_then(|p| p.get("model"))
+        .and_then(V::text).unwrap_or("human/authority");
+    let footprint: Vec<String> = b.get("footprint").and_then(V::arr).unwrap_or(&[])
+        .iter().filter_map(|p| p.text().map(|s| format!("\"{}\"", jesc(s)))).collect();
+    let mut chain = Vec::new();
+    let mut cur = env.get("auth").and_then(|a| a.bytes().map(|_| as_oid(a)));
+    while let Some(cap) = cur {
+        let cenv = hub.store.env.get(&cap)?;
+        let cb = cenv.get("body")?;
+        let issuer = cenv.get("author")?.bytes()?;
+        let audience = cb.get("audience")?.bytes()?;
+        let scope = cb.get("scope")?;
+        let acts: Vec<String> = scope.get("actions").and_then(V::arr).unwrap_or(&[])
+            .iter().filter_map(|a| a.text().map(|s| format!("\"{}\"", jesc(s)))).collect();
+        let paths: Vec<String> = scope.get("paths").and_then(V::arr).unwrap_or(&[])
+            .iter().filter_map(|p| p.text().map(|s| format!("\"{}\"", jesc(s)))).collect();
+        let parent = cb.get("parent");
+        let is_top = matches!(parent, Some(V::Null) | None);
+        let root = is_top && hub.authority.iter().any(|k| k[..] == issuer[..]);
+        chain.push(format!(
+            "{{\"oid\":\"{}\",\"issuer\":\"{}\",\"audience\":\"{}\",\"actions\":[{}],\"paths\":[{}],\"root\":{}}}",
+            hex(&cap), hex(issuer), hex(audience), acts.join(","), paths.join(","), root));
+        cur = if is_top { None } else { Some(as_oid(parent?)) };
+    }
+    Some(format!(
+        "{{\"oid\":\"{}\",\"author\":\"{}\",\"model\":\"{}\",\"message\":\"{}\",\"footprint\":[{}],\"chain\":[{}]}}",
+        hex(oid), hex(env.get("author")?.bytes()?), jesc(model),
+        jesc(b.get("message").and_then(V::text).unwrap_or("")),
+        footprint.join(","), chain.join(",")))
 }
 
 fn jesc(s: &str) -> String {
@@ -248,6 +298,15 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
     let json = "application/json".to_string();
     let mut hub = shared.lock().unwrap();
     match (method, url) {
+        ("GET", "/") => {
+            (200, DASHBOARD.as_bytes().to_vec(), "text/html; charset=utf-8".into())
+        }
+        ("GET", _) if url.starts_with("/provenance/") => {
+            match parse_oid(&url[12..]).and_then(|oid| provenance_json(&hub, &oid)) {
+                Some(payload) => (200, payload.into_bytes(), json),
+                None => (404, b"{\"error\":\"unknown change\"}".to_vec(), json),
+            }
+        }
         ("GET", "/gatekey") => {
             (200, format!("{{\"pub\":\"{}\"}}", hex(&hub.gate_pub)).into_bytes(), json)
         }
