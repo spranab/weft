@@ -27,6 +27,7 @@ pub struct Hub {
     pub pending: Vec<(Oid, String)>, // (manifest, JSON) awaiting approvals
     pub cohort: std::collections::BTreeMap<Oid, u64>, // bisection groups after
     pub next_cohort: u64,                             // batch evidence failure
+    pub readonly: bool,                               // public demo: no writes
     pub gate_sk: SigningKey,
     pub gate_pub: [u8; 32],
 }
@@ -242,6 +243,7 @@ pub fn new_hub() -> Shared {
         pending: vec![],
         cohort: std::collections::BTreeMap::new(),
         next_cohort: 0,
+        readonly: false,
         gate_sk,
         gate_pub,
     }))
@@ -494,6 +496,222 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
         hex(&lnd), mat.markers.len(), warns.join(","), changes_json.join(",")));
 }
 
+// ------------------------------------------------------------ demo ---------
+
+/// Populate a hub with a small in-process scenario so a public read-only
+/// instance boots with a living governance console: identities, intents,
+/// batched landings from three "models", a same-anchor race, one stale-read
+/// rejection, one revoked-credential rejection. No external processes, no
+/// persistence needed — state rebuilds on every boot.
+pub fn seed_demo(shared: &Shared) {
+    let gate_pub = shared.lock().unwrap().gate_pub;
+    let (auth_sk, auth_pub) = keygen();
+    let ts = now_ms();
+    let put = |sk: &SigningKey, repo: Option<Oid>, typ: &str, body: V,
+               auth: Option<Oid>| -> Oid {
+        let (_, raw) = make_obj(sk, repo, typ, body, auth, now_ms());
+        let mut hub = shared.lock().unwrap();
+        let oid = hub.store.put(raw).expect("demo object");
+        apply_side_effects(&mut hub, &oid).expect("demo side effects");
+        oid
+    };
+    let gen = put(&auth_sk, None, "genesis", V::map(vec![
+        ("name", V::Text("weft-demo".into())),
+        ("authority", V::Arr(vec![V::Bytes(auth_pub.to_vec())])),
+        ("quorum", V::Int(1)),
+        ("refs", V::map(vec![("trunk", V::map(vec![
+            ("gates", V::Arr(vec![V::Bytes(gate_pub.to_vec())])),
+            ("threshold", V::Int(1))]))])),
+        ("policy_init", V::map(vec![
+            ("rules", V::Arr(vec![])), ("recipes", V::Arr(vec![])),
+            ("approvals", V::Int(0)), ("stale_reads", V::Text("reject".into()))])),
+        ("config_init", V::map(vec![]))]), None);
+    put(&auth_sk, Some(gen), "identity", V::map(vec![
+        ("kind", V::Text("human".into())), ("name", V::Text("pranab".into()))]),
+        None);
+    let cap_auth = put(&auth_sk, Some(gen), "capability", V::map(vec![
+        ("audience", V::Bytes(auth_pub.to_vec())),
+        ("parent", V::Null),
+        ("scope", V::map(vec![
+            ("actions", V::Arr(vec![V::Text("publish_change".into()),
+                                    V::Text("propose".into()),
+                                    V::Text("instruct".into())])),
+            ("paths", V::Arr(vec![V::Text("**".into())]))])),
+        ("exp", V::Int(ts + 3_650 * 24 * 3_600_000)),
+        ("meta", V::map(vec![("reason", V::Text("Maintainer".into()))]))]), None);
+
+    // base: README + src module, landed via the real gate
+    let base_patch = put(&auth_sk, Some(gen), "patch", V::map(vec![
+        ("nonce", V::Bytes(b"demobase".to_vec())),
+        ("ops", V::Arr(vec![
+            V::Arr(vec![V::Text("mkfile".into()), V::Text("README.md".into())]),
+            V::Arr(vec![V::Text("mkfile".into()), V::Text("src/gate.rs".into())]),
+            V::Arr(vec![V::Text("insert".into()),
+                V::Arr(vec![V::Null, V::Int(0)]),
+                V::Arr(vec![V::Text("S".into())]),
+                V::Arr(vec![
+                    V::Bytes(b"# weft demo repository".to_vec()),
+                    V::Bytes(b"verification is the merge gate".to_vec())])]),
+            V::Arr(vec![V::Text("insert".into()),
+                V::Arr(vec![V::Null, V::Int(1)]),
+                V::Arr(vec![V::Text("S".into())]),
+                V::Arr(vec![
+                    V::Bytes(b"fn certify() { /* evidence, not eyeballs */ }".to_vec())])])]))]),
+        None);
+    let base_change = put(&auth_sk, Some(gen), "change", V::map(vec![
+        ("patch", V::Bytes(base_patch.to_vec())),
+        ("footprint", V::Arr(vec![V::Text("README.md".into()),
+                                  V::Text("src/gate.rs".into())])),
+        ("reads", V::Arr(vec![])),
+        ("message", V::Text("scaffold the demo repo".into()))]), Some(cap_auth));
+    let prop = put(&auth_sk, Some(gen), "proposal", V::map(vec![
+        ("ref", V::Text("trunk".into())),
+        ("delta", V::Arr(vec![V::Bytes(base_change.to_vec())])),
+        ("status", V::Text("open".into()))]), Some(cap_auth));
+    shared.lock().unwrap().queue.push(prop);
+    gate_tick(shared);
+    let base_digest = {
+        let hub = shared.lock().unwrap();
+        let st = hub.head_state.expect("base landed");
+        let target: Vec<Oid> = state_set(&hub.store, &st).into_iter().collect();
+        h(&materialize(&hub.store, &target).unwrap().tree["README.md"])
+    };
+
+    // intents + three model workers landing concurrent work
+    put(&auth_sk, Some(gen), "intent", V::map(vec![
+        ("ref", V::Text("trunk".into())),
+        ("title", V::Text("add contributor docs".into())),
+        ("goal", V::Text("explain capability delegation".into())),
+        ("constraints", V::Arr(vec![])),
+        ("criteria", V::Arr(vec![V::map(vec![
+            ("desc", V::Text("docs mention roles-as-templates".into()))])])),
+        ("priority", V::Int(70))]), None);
+    let models = ["claude-fable-5", "gpt-5.6-sol", "qwen3.8-max"];
+    let mut worker_caps = Vec::new();
+    for (i, model) in models.iter().enumerate() {
+        let (w_sk, w_pub) = keygen();
+        let cap = put(&auth_sk, Some(gen), "capability", V::map(vec![
+            ("audience", V::Bytes(w_pub.to_vec())),
+            ("parent", V::Bytes(cap_auth.to_vec())),
+            ("scope", V::map(vec![
+                ("actions", V::Arr(vec![V::Text("publish_change".into()),
+                                        V::Text("propose".into())])),
+                ("paths", V::Arr(vec![V::Text("**".into())]))])),
+            ("exp", V::Int(ts + 3_650 * 24 * 3_600_000)),
+            ("meta", V::map(vec![("reason",
+                V::Text(format!("Contributor ({model})")))]))]), None);
+        worker_caps.push((w_sk, cap, *model, i));
+    }
+    // wait: children of cap_auth must be authored by cap_auth's AUDIENCE
+    // (the authority key) — the demo delegates directly from the authority,
+    // so re-mint each worker capability correctly above via auth_sk. ✓
+    for (w_sk, cap, model, i) in &worker_caps {
+        let patch = put(w_sk, Some(gen), "patch", V::map(vec![
+            ("nonce", V::Bytes(format!("worker{i}_").into_bytes())),
+            ("ops", V::Arr(vec![
+                V::Arr(vec![V::Text("mkfile".into()),
+                            V::Text(format!("docs/{model}.md"))]),
+                V::Arr(vec![V::Text("insert".into()),
+                    V::Arr(vec![V::Null, V::Int(0)]),
+                    V::Arr(vec![V::Text("S".into())]),
+                    V::Arr(vec![V::Bytes(format!(
+                        "notes from {model}: roles are capability templates")
+                        .into_bytes())])])]))]), None);
+        let change = put(w_sk, Some(gen), "change", V::map(vec![
+            ("patch", V::Bytes(patch.to_vec())),
+            ("footprint", V::Arr(vec![V::Text(format!("docs/{model}.md"))])),
+            ("reads", V::Arr(vec![])),
+            ("message", V::Text(format!("contributor docs ({model})"))),
+            ("provenance", V::map(vec![("model", V::Text((*model).into()))]))]),
+            Some(*cap));
+        let prop = put(w_sk, Some(gen), "proposal", V::map(vec![
+            ("ref", V::Text("trunk".into())),
+            ("delta", V::Arr(vec![V::Bytes(change.to_vec())])),
+            ("status", V::Text("open".into()))]), Some(*cap));
+        shared.lock().unwrap().queue.push(prop);
+    }
+    gate_tick(shared); // three disjoint changes batch into one landing
+
+    // a stale-read rejection: reads an outdated README digest
+    let (w_sk, cap, model, _) = &worker_caps[0];
+    let readme_edit = put(&auth_sk, Some(gen), "patch", V::map(vec![
+        ("nonce", V::Bytes(b"readmev2".to_vec())),
+        ("ops", V::Arr(vec![V::Arr(vec![V::Text("insert".into()),
+            V::Arr(vec![V::Bytes(base_patch.to_vec()), V::Int(0)]),
+            V::Arr(vec![V::Text("S".into())]),
+            V::Arr(vec![V::Bytes(b"## updated by the authority".to_vec())])])]))]),
+        None);
+    let readme_change = put(&auth_sk, Some(gen), "change", V::map(vec![
+        ("patch", V::Bytes(readme_edit.to_vec())),
+        ("footprint", V::Arr(vec![V::Text("README.md".into())])),
+        ("reads", V::Arr(vec![])),
+        ("message", V::Text("update README".into()))]), Some(cap_auth));
+    let prop = put(&auth_sk, Some(gen), "proposal", V::map(vec![
+        ("ref", V::Text("trunk".into())),
+        ("delta", V::Arr(vec![V::Bytes(readme_change.to_vec())])),
+        ("status", V::Text("open".into()))]), Some(cap_auth));
+    shared.lock().unwrap().queue.push(prop);
+    gate_tick(shared);
+    let stale_patch = put(w_sk, Some(gen), "patch", V::map(vec![
+        ("nonce", V::Bytes(b"stalewrk".to_vec())),
+        ("ops", V::Arr(vec![
+            V::Arr(vec![V::Text("mkfile".into()), V::Text("docs/stale.md".into())]),
+            V::Arr(vec![V::Text("insert".into()),
+                V::Arr(vec![V::Null, V::Int(0)]),
+                V::Arr(vec![V::Text("S".into())]),
+                V::Arr(vec![V::Bytes(b"reasoned against the old README".to_vec())])])]))]),
+        None);
+    let stale_change = put(w_sk, Some(gen), "change", V::map(vec![
+        ("patch", V::Bytes(stale_patch.to_vec())),
+        ("footprint", V::Arr(vec![V::Text("docs/stale.md".into())])),
+        ("reads", V::Arr(vec![V::Arr(vec![
+            V::Text("README.md".into()), V::Bytes(base_digest.to_vec())])])),
+        ("message", V::Text(format!("stale reasoning ({model})"))),
+        ("provenance", V::map(vec![("model", V::Text((*model).into()))]))]),
+        Some(*cap));
+    let prop = put(w_sk, Some(gen), "proposal", V::map(vec![
+        ("ref", V::Text("trunk".into())),
+        ("delta", V::Arr(vec![V::Bytes(stale_change.to_vec())])),
+        ("status", V::Text("open".into()))]), Some(*cap));
+    shared.lock().unwrap().queue.push(prop);
+    gate_tick(shared); // rejected: stale read
+
+    // a revoked-credential rejection
+    let (w_sk, cap, model, _) = &worker_caps[1];
+    put(&auth_sk, Some(gen), "revocation", V::map(vec![
+        ("target", V::Bytes(cap.to_vec())),
+        ("reason", V::Text("credential rotation drill".into()))]), None);
+    let hack_patch = put(w_sk, Some(gen), "patch", V::map(vec![
+        ("nonce", V::Bytes(b"revokedw".to_vec())),
+        ("ops", V::Arr(vec![
+            V::Arr(vec![V::Text("mkfile".into()), V::Text("docs/late.md".into())]),
+            V::Arr(vec![V::Text("insert".into()),
+                V::Arr(vec![V::Null, V::Int(0)]),
+                V::Arr(vec![V::Text("S".into())]),
+                V::Arr(vec![V::Bytes(b"submitted after revocation".to_vec())])])]))]),
+        None);
+    let hack_change = put(w_sk, Some(gen), "change", V::map(vec![
+        ("patch", V::Bytes(hack_patch.to_vec())),
+        ("footprint", V::Arr(vec![V::Text("docs/late.md".into())])),
+        ("reads", V::Arr(vec![])),
+        ("message", V::Text(format!("post-revocation attempt ({model})"))),
+        ("provenance", V::map(vec![("model", V::Text((*model).into()))]))]),
+        Some(*cap));
+    let prop = put(w_sk, Some(gen), "proposal", V::map(vec![
+        ("ref", V::Text("trunk".into())),
+        ("delta", V::Arr(vec![V::Bytes(hack_change.to_vec())])),
+        ("status", V::Text("open".into()))]), Some(*cap));
+    shared.lock().unwrap().queue.push(prop);
+    gate_tick(shared); // rejected: capability revoked
+
+    put(&auth_sk, Some(gen), "note", V::map(vec![
+        ("kind", V::Text("context".into())),
+        ("text", V::Text("This is a READ-ONLY public demo. Everything you see \
+            — landings, rejections, provenance chains — was produced by the \
+            real gate at boot. Run your own hub: github.com/spranab/agchub".into())),
+        ("anchors", V::Arr(vec![]))]), None);
+}
+
 // ------------------------------------------------------------ http ---------
 
 pub fn serve(port: u16, shared: Shared) {
@@ -504,7 +722,7 @@ pub fn serve(port: u16, shared: Shared) {
             gate_tick(&s);
         });
     }
-    let server = tiny_http::Server::http(("127.0.0.1", port)).expect("bind");
+    let server = tiny_http::Server::http(("0.0.0.0", port)).expect("bind");
     for mut req in server.incoming_requests() {
         let url = req.url().to_string();
         let method = req.method().to_string();
@@ -521,6 +739,9 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
          -> (u16, Vec<u8>, String) {
     let json = "application/json".to_string();
     let mut hub = shared.lock().unwrap();
+    if hub.readonly && method == "POST" {
+        return (403, b"{\"error\":\"read-only demo instance - clone https://github.com/spranab/agchub and run your own hub\"}".to_vec(), json);
+    }
     match (method, url) {
         ("GET", "/") => {
             (200, DASHBOARD.as_bytes().to_vec(), "text/html; charset=utf-8".into())

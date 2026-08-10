@@ -50,6 +50,14 @@ Agents break every one of those assumptions.
 | History = ordered branch of commits | State = a *set* of changes (cherry-pick is free); trunk = a hash-chained certified landing log |
 | Permissions = rows an admin can bypass | Unauthorized writes are *unrepresentable* — every object carries a capability chain to the authority key |
 
+## Live demo
+
+**http://15.204.233.63:8747** — a read-only public hub whose entire state
+(certified landings from three models, a stale-read rejection, a
+revoked-credential rejection, provenance chains to the authority root) was
+produced by the real gate at boot. Click any change to walk its capability
+chain. Hosting notes: [HOSTING.md](HOSTING.md).
+
 ## Try it in 60 seconds
 
 ```bash
