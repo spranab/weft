@@ -7,7 +7,7 @@ you want to write.
 |---|---|---|---|
 | 1 | **MCP** (recommended) | anything with an MCP client — Hermes, OpenClaw, Claude Code, Codex, code_puppy | none |
 | 2 | **[Native Hermes plugin](hermes-weft/)** | Hermes Agent | `hermes plugins install spranab/weft-hermes-plugin` |
-| 3 | **[Native OpenClaw plugin](openclaw-weft/)** | OpenClaw | npm + ClawHub (publishing next) |
+| 3 | **[Native OpenClaw plugin](openclaw-weft/)** | OpenClaw | `npm i @weftgate/openclaw-weft` |
 
 All three end in the same place: the agent proposes, the gate decides, and
 whatever lands carries signed provenance back to a human authority key. And
@@ -48,18 +48,19 @@ pip install requests cryptography      # into the same env Hermes runs from
 Repo: [spranab/weft-hermes-plugin](https://github.com/spranab/weft-hermes-plugin)
 — the copy in `hermes-weft/` here is the development source.
 
-**OpenClaw** — OpenClaw code plugins install from npm, so publishing is:
+**OpenClaw** — published standalone with `dist/` committed, so it installs
+straight from the repo today:
+[spranab/weft-openclaw-plugin](https://github.com/spranab/weft-openclaw-plugin).
+
+Two publishing steps remain and both need account credentials:
 
 ```bash
-cd integrations/openclaw-weft
-npm install && npm run build
-npm publish --access public            # @weftgate/openclaw-weft
+git clone https://github.com/spranab/weft-openclaw-plugin && cd weft-openclaw-plugin
+npm publish --access public            # needs `npm login`
 ```
 
 then list it on ClawHub via the web form at `clawhub.ai/publish-plugin`
-(the ClawHub CLI publishes skills only, not code plugins). Until that lands,
-install from a local checkout with OpenClaw's local-plugin path, or use the
-MCP route above.
+(the ClawHub CLI publishes skills only, not code plugins).
 
 ## Native plugins — when you want more than tools
 
