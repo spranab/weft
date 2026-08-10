@@ -2,3 +2,4 @@ target/
 __pycache__/
 *.pyc
 .weft-agent.key
+.weft-cli.key

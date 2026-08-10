@@ -1,0 +1,19 @@
+[package]
+name = "weft-cli"
+version = "0.1.0"
+description = "The weft CLI: bootstrap repos on a Weft hub and bridge to git — import a git HEAD, let agents land certified work, export conventional commits with provenance trailers."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "weft"
+path = "src/main.rs"
+
+[dependencies]
+weft-core = { path = "../weft-core" }
+ed25519-dalek = "2"
+serde_json = "1"
+
+[dev-dependencies]
+weftd = { path = "../weftd" }

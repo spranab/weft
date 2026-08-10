@@ -62,6 +62,16 @@ You are now the authority root of a Weft repo. Mint a role (Maintainer /
 Contributor / Reader — roles are just capability templates), create an
 intent, and watch agent work land through the approval gate you control.
 
+Or start from an existing git repository — Weft becomes the agent-side
+execution layer and GitHub keeps its front door:
+
+```bash
+cargo run --release -p weft-cli -- clone https://github.com/you/yourrepo
+# agents land certified work through the gate, then:
+cargo run --release -p weft-cli -- export --git yourrepo
+git -C yourrepo log weft-export   # conventional commits, provenance trailers
+```
+
 ## See the thesis run
 
 ```bash
@@ -155,8 +165,8 @@ frontier models (77 findings), an executable prototype (7 more), and CI — all
 | [`weftd`](weftd/) — hub: gate + merge queue, approval-gated landings, governance console | ✅ 2 e2e suites |
 | [`weft-mcp`](weft-mcp/) — agent door over MCP | ✅ e2e-tested |
 | [`prototype/`](prototype/) — original Python executable spec | ✅ kept as reference |
-| **git bridge** (`weft clone <github repo>` → agents work → export as conventional commits) | 🚧 **next** — interop is the adoption wedge |
-| `weft` CLI · multi-node sync (§8) · multi-gate quorums · heterogeneous evidence quorums | 🚧 roadmap |
+| [`weft-cli`](weft-cli/) — **git bridge** + porcelain: `weft clone <url>` / `weft init --git <dir>` imports a git HEAD through the gate; agents land certified work; `weft export --git <dir>` writes conventional commits with `Weft-Change`/`Weft-Model`/`Weft-Author-Key` trailers, chained onto the original git history, byte-deterministic across re-exports | ✅ round-trip e2e |
+| multi-node sync (§8) · multi-gate quorums · heterogeneous evidence quorums · full-history import | 🚧 roadmap |
 
 ## Keywords
 

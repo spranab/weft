@@ -1,5 +1,5 @@
 [workspace]
-members = ["weft-core", "weftd", "weft-mcp"]
+members = ["weft-core", "weftd", "weft-mcp", "weft-cli"]
 resolver = "2"
 
 [workspace.package]

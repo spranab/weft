@@ -12,6 +12,8 @@ this project is built for.
 - `cargo run --release -p weftd` — hub + gate + governance console on :8747.
 - `cargo run --release -p weftd --example bench` — benchmark suite.
 - `python prototype/weft_fuzz.py` — the Python executable-spec fuzzer.
+- `cargo run --release -p weft-cli -- <init|clone|status|export>` — the git
+  bridge: import a git HEAD, export landed history as conventional commits.
 
 ## Using Weft itself (dogfooding)
 

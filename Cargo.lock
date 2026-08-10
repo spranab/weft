@@ -471,6 +471,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
+name = "weft-cli"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "serde_json",
+ "weft-core",
+ "weftd",
+]
+
+[[package]]
 name = "weft-core"
 version = "0.1.0"
 dependencies = [
