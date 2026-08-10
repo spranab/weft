@@ -83,6 +83,19 @@
   .term .r { color: var(--bad); }
   .term .a { color: var(--accent); }
 
+  .faq details { background: var(--bg1); border: 1px solid var(--line);
+    border-radius: 12px; margin: .65rem 0; overflow: hidden; }
+  .faq summary { cursor: pointer; padding: 1rem 1.3rem; font-weight: 650;
+    font-size: 1rem; list-style: none; display: flex; gap: .8rem; align-items: baseline; }
+  .faq summary::before { content: "+"; color: var(--accent); font-weight: 700;
+    font-family: var(--mono); flex: none; }
+  .faq details[open] summary::before { content: "–"; }
+  .faq summary:hover { color: var(--accent); }
+  .faq details > div { padding: 0 1.3rem 1.1rem 2.6rem; color: var(--dim);
+    font-size: .93rem; }
+  .faq details > div p + p { margin-top: .6rem; }
+  .faq .mono { font-family: var(--mono); font-size: .88em; color: var(--accent); }
+
   .strip { display: flex; gap: 2.2rem; flex-wrap: wrap; justify-content: center;
     padding: 1.6rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
   .strip div { text-align: center; }
@@ -104,6 +117,7 @@
   <span class="brand">🧵 <span>weft</span></span>
   <span class="spacer"></span>
   <a href="https://demo.weftgate.com">Live demo</a>
+  <a href="#faq">Why not…?</a>
   <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-weft-protocol.md">RFC-0001</a>
   <a href="https://github.com/spranab/weft">GitHub</a>
 </nav>
@@ -223,6 +237,217 @@
   <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md">public</a>.</p>
   <div class="term"><span class="c">$</span> git clone https://github.com/spranab/weft && cd weft<br>
   <span class="c">$</span> cargo run --release -p weftd <span class="c"># console on :8747 — you are the authority</span></div>
+</section>
+
+<section class="faq" id="faq">
+  <h2>“Why not just…?”</h2>
+  <p class="lead">The strongest versions of the questions we'd ask ourselves —
+  answered concretely, and honestly where the answer is “that's a real limit
+  today.”</p>
+
+  <svg viewBox="0 0 1000 560" style="width:100%;height:auto;margin:0 0 1.4rem"
+       font-family="ui-monospace, Consolas, monospace" aria-label="git branches versus the weft gate">
+    <!-- ══ top panel: git ══ -->
+    <text x="40" y="34" fill="#5e6b78" font-size="12" letter-spacing="2">GIT + BRANCHES + PRs — N AGENTS</text>
+    <line x1="40" y1="120" x2="640" y2="120" stroke="#93a0ae" stroke-width="2"/>
+    <text x="42" y="110" fill="#93a0ae" font-size="11">main</text>
+    <!-- branches diverge and race back -->
+    <path d="M120,120 C180,60 480,60 600,102" fill="none" stroke="#6ea6dc" stroke-width="1.5"/>
+    <path d="M150,120 C220,80 490,80 604,110" fill="none" stroke="#6ea6dc" stroke-width="1.5" opacity=".75"/>
+    <path d="M180,120 C250,170 490,170 604,132" fill="none" stroke="#d96c6c" stroke-width="1.5"/>
+    <path d="M210,120 C280,190 500,190 608,138" fill="none" stroke="#6ea6dc" stroke-width="1.5" opacity=".55"/>
+    <path d="M240,120 C300,45 500,45 600,98" fill="none" stroke="#6ea6dc" stroke-width="1.5" opacity=".4"/>
+    <text x="250" y="52" fill="#5e6b78" font-size="11">50 branches…</text>
+    <!-- the stale-read trap -->
+    <rect x="300" y="150" width="64" height="22" rx="4" fill="none" stroke="#e2a83d"/>
+    <text x="310" y="165" fill="#e2a83d" font-size="11">api.rs</text>
+    <path d="M330,150 C330,120 330,95 360,78" fill="none" stroke="#e2a83d" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="368" y="72" fill="#e2a83d" font-size="11">branch A rewrites it</text>
+    <path d="M364,172 C420,196 470,192 500,182" fill="none" stroke="#d96c6c" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="380" y="205" fill="#d96c6c" font-size="11">branch B only READ it → merges cleanly, semantically stale — invisible to git</text>
+    <!-- funnel: PR queue + human -->
+    <rect x="640" y="84" width="120" height="72" rx="8" fill="#11151c" stroke="#232b36"/>
+    <text x="654" y="102" fill="#5e6b78" font-size="10">PR QUEUE</text>
+    <rect x="654" y="110" width="90" height="9" rx="2" fill="#232b36"/>
+    <rect x="654" y="123" width="90" height="9" rx="2" fill="#232b36"/>
+    <rect x="654" y="136" width="90" height="9" rx="2" fill="#232b36"/>
+    <circle cx="810" cy="120" r="22" fill="none" stroke="#93a0ae" stroke-width="1.5"/>
+    <circle cx="810" cy="112" r="7" fill="none" stroke="#93a0ae" stroke-width="1.5"/>
+    <path d="M797,132 C800,122 820,122 823,132" fill="none" stroke="#93a0ae" stroke-width="1.5"/>
+    <text x="778" y="160" fill="#93a0ae" font-size="11">human review</text>
+    <text x="774" y="176" fill="#d96c6c" font-size="11">the bottleneck</text>
+    <line x1="832" y1="120" x2="960" y2="120" stroke="#93a0ae" stroke-width="1" stroke-dasharray="2 4"/>
+
+    <line x1="40" y1="250" x2="960" y2="250" stroke="#232b36"/>
+
+    <!-- ══ bottom panel: weft ══ -->
+    <text x="40" y="290" fill="#5e6b78" font-size="12" letter-spacing="2">WEFT — SAME SWARM, NO BRANCHES</text>
+    <!-- warp threads -->
+    <line x1="40" y1="340" x2="600" y2="340" stroke="#232b36"/>
+    <line x1="40" y1="380" x2="600" y2="380" stroke="#232b36"/>
+    <line x1="40" y1="420" x2="600" y2="420" stroke="#232b36"/>
+    <line x1="40" y1="460" x2="600" y2="460" stroke="#232b36"/>
+    <!-- changes flowing to gate -->
+    <circle cx="430" cy="340" r="6" fill="#e2a83d"/><circle cx="360" cy="340" r="6" fill="#6ea6dc"/>
+    <circle cx="470" cy="380" r="6" fill="#52b381"/><circle cx="395" cy="380" r="6" fill="#e2a83d"/>
+    <circle cx="440" cy="420" r="6" fill="#6ea6dc"/>
+    <circle cx="480" cy="460" r="6" fill="#d96c6c"/>
+    <text x="60" y="332" fill="#5e6b78" font-size="11">changes = signed ops + intent + read-set + evidence</text>
+    <!-- the gate -->
+    <rect x="600" y="300" width="18" height="190" rx="9" fill="#e2a83d" opacity=".9"/>
+    <text x="580" y="516" fill="#e2a83d" font-size="12" letter-spacing="1">THE GATE</text>
+    <text x="500" y="534" fill="#5e6b78" font-size="10">capabilities · read-sets · evidence · policy</text>
+    <!-- landed: certified trunk -->
+    <line x1="618" y1="400" x2="960" y2="400" stroke="#e2a83d" stroke-width="2"/>
+    <rect x="660" y="386" width="84" height="28" rx="14" fill="#11151c" stroke="#e2a83d"/>
+    <text x="670" y="404" fill="#e2a83d" font-size="11">seq 7 · 40✓</text>
+    <rect x="770" y="386" width="70" height="28" rx="14" fill="#11151c" stroke="#e2a83d" opacity=".7"/>
+    <text x="780" y="404" fill="#e2a83d" font-size="11" opacity=".8">seq 8 · 3✓</text>
+    <rect x="866" y="386" width="70" height="28" rx="14" fill="#11151c" stroke="#e2a83d" opacity=".45"/>
+    <text x="876" y="404" fill="#e2a83d" font-size="11" opacity=".6">seq 9 · 12✓</text>
+    <text x="660" y="378" fill="#52b381" font-size="11">✓ disjoint work commutes — one landing, one evidence run</text>
+    <!-- rejected: bounce -->
+    <path d="M600,460 C570,480 540,486 500,488" fill="none" stroke="#d96c6c" stroke-width="1.5" stroke-dasharray="5 3"/>
+    <text x="330" y="492" fill="#d96c6c" font-size="11">✗ stale read · revoked key · failed evidence</text>
+    <!-- no human bottleneck note -->
+    <text x="700" y="452" fill="#93a0ae" font-size="11">humans approve intents &amp; policy,</text>
+    <text x="700" y="468" fill="#93a0ae" font-size="11">not lines — by signed evidence</text>
+  </svg>
+
+  <details open>
+    <summary>Why not just git branches and worktrees?</summary>
+    <div>
+      <p>Branches give agents <em>isolation</em> — which was never the hard
+      part. The hard parts are what happens after: fifty branches racing to
+      merge serialize on line-level textual conflicts, and someone has to
+      arbitrate. In Weft, state is a <em>set</em> of identity-anchored changes,
+      so disjoint work commutes — the live demo lands
+      <span class="mono">40 independent changes in one certified landing</span>
+      with a single evidence run.</p>
+      <p>Worse is what git can't see at all: agent B reads
+      <span class="mono">api.rs</span> and writes
+      <span class="mono">client.rs</span>; agent A rewrites
+      <span class="mono">api.rs</span> first. B's branch merges <em>cleanly</em>
+      — nothing overlaps textually — but B reasoned against a world that no
+      longer exists. Weft changes carry a <em>read-set</em>, and the gate
+      rejects exactly this (8/8 in the demo). And finally, the gate itself:
+      with branches, the merge gate is a human reading diffs — at agent
+      throughput, that's the bottleneck, or nobody.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Why not GitHub + branch protection + a merge queue?</summary>
+    <div>
+      <p>That stack is Weft's closest ancestor — Weft is roughly what it
+      becomes when promoted from forge features into a signed protocol. The
+      differences: a green check attests “CI passed on this branch,” not on
+      <em>these exact bytes</em> (Weft evidence binds to a Merkle manifest of
+      the materialized tree). Permissions are database rows an admin can
+      bypass; in Weft, unauthorized writes are <em>unrepresentable</em> —
+      every object carries a capability chain to the authority key.
+      Provenance — which model, under whose delegated authority, having
+      observed what — has no home in a PR. And the queue, reviews, and issues
+      live in the forge's database: clone the repo, lose the coordination.
+      Weft's coordination state replicates with the repo.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Isn't CI already “verification as the merge gate”?</summary>
+    <div>
+      <p>CI <em>executes</em> checks; it doesn't <em>account</em> for them.
+      “Checks passed” is a status flag on a mutable ref — bypassable by
+      admins, racy under force-pushes, and silent about who verified what
+      environment. Weft treats evidence as a first-class signed object bound
+      to exact bytes, requires attestors to chain to trust roots the policy
+      names, and makes the certified landing log the <em>only</em> way trunk
+      advances. CI is the muscle; Weft is the ledger the muscle reports to.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Why a CRDT instead of git's three-way merge?</summary>
+    <div>
+      <p>Because agents need concurrency without coordination. Weft patches
+      reference stable line <em>identities</em>, not line numbers — a queued
+      change never goes stale while it waits, cherry-picking is free, and
+      disjoint work batches into one landing. Deterministic materialization
+      means every node derives byte-identical trees, so evidence provably
+      describes the same bytes everywhere. And Weft is honest about limits:
+      the CRDT resolves <em>placement</em>, never <em>meaning</em> — semantic
+      correctness is evidence's job, by design.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Is this a blockchain?</summary>
+    <div>
+      <p>No. No token, no mining, no global consensus. Consensus is per-repo
+      and per-ref, among gate keys the genesis names — for a solo self-hosted
+      hub that's one key and zero ceremony; for a federation it's a real
+      quorum. Disagreement forks the repository, which for scratch work is a
+      feature, not a crisis.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>How is this different from Pijul, Radicle, Gerrit, or Fossil?</summary>
+    <div>
+      <p>Weft borrows from all of them, gratefully and on the record: patch
+      commutation from Pijul/Darcs, keypair identity and the p2p forge idea
+      from Radicle, change-centric flow from Gerrit,
+      coordination-lives-in-the-repo from Fossil. What none of them has:
+      capabilities, read-sets, machine-readable intents, and evidence as
+      protocol objects — because all of them still assume a human reads the
+      change. Weft's bet is specifically about what verification-gated agent
+      swarms need. The full prior-art table is in the
+      <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-weft-protocol.md">RFC appendix</a>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Do I have to leave GitHub?</summary>
+    <div>
+      <p>No — that's the point of the bridge.
+      <span class="mono">weft clone</span> imports your repo through the gate;
+      agents land certified work; <span class="mono">weft export</span> writes
+      conventional git commits with provenance trailers
+      (<span class="mono">Weft-Change</span>,
+      <span class="mono">Weft-Model</span>,
+      <span class="mono">Weft-Author-Key</span>), chained onto your original
+      history, byte-deterministic across re-exports. GitHub stays the human
+      front door; Weft is the agent-side execution layer underneath.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What if an agent writes a bug <em>and</em> a passing bad test?</summary>
+    <div>
+      <p>The honest hard problem — “who verifies the verifier.” Today: policy
+      pins evidence recipes by digest (an agent can't quietly swap the test
+      suite), attestors must chain to distinct trust roots (minting keys
+      doesn't help), and human approval gates can be required where stakes
+      are high. On the roadmap, and designed for from the start:
+      heterogeneous evidence quorums — compiler, tests, property checks,
+      independent model reviews, runtime traces — with policy declaring what
+      combination is sufficient. We discuss this openly in
+      <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-weft-protocol.md">RFC §15</a>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Is it production-ready?</summary>
+    <div>
+      <p>It's a working, tested, publicly-reviewed pre-1.0: thirteen e2e
+      suites, a <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md">review
+      log of 91 dispositioned findings</a> from five kinds of adversary, and
+      a live demo. Not yet there: disk persistence (the store is in-memory),
+      evidence sandboxing for <em>writable</em> public hubs, and multi-node
+      sync. Self-hosted and private-network use is real today; the 1.0 arc is
+      the repo's roadmap.</p>
+    </div>
+  </details>
 </section>
 </div>
 
