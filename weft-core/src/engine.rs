@@ -152,6 +152,31 @@ pub fn materialize(store: &Store, changes: &[Oid]) -> Result<Mat, String> {
     let mut conflicts: Vec<V> = Vec::new();
     let mut markers: Vec<V> = Vec::new();
 
+    // dependency reachability for concurrency tests (finding W9): an
+    // edit-delete pair is a conflict only if the patches are CONCURRENT —
+    // sequential history (deleting a line whose successor chained onto it)
+    // is normal editing, not a conflict
+    let deps_map: BTreeMap<Oid, BTreeSet<Oid>> = patches.iter()
+        .map(|(p, b)| (*p, patch_deps(b, p))).collect();
+    fn tclose(p: Oid, deps: &BTreeMap<Oid, BTreeSet<Oid>>,
+              memo: &mut BTreeMap<Oid, BTreeSet<Oid>>) -> BTreeSet<Oid> {
+        if let Some(s) = memo.get(&p) {
+            return s.clone();
+        }
+        let mut out = BTreeSet::new();
+        for d in deps.get(&p).cloned().unwrap_or_default() {
+            out.insert(d);
+            out.extend(tclose(d, deps, memo));
+        }
+        memo.insert(p, out.clone());
+        out
+    }
+    let mut memo: BTreeMap<Oid, BTreeSet<Oid>> = BTreeMap::new();
+    let concurrent = |a: Oid, b: Oid, memo: &mut BTreeMap<Oid, BTreeSet<Oid>>| {
+        a != b && !tclose(a, &deps_map, memo).contains(&b)
+            && !tclose(b, &deps_map, memo).contains(&a)
+    };
+
     // path resolution (RFC §6.3 tree class + edit-rm, finding W2)
     let mut file_map: BTreeMap<Fid, Option<String>> = BTreeMap::new();
     for (fid, meta) in &files {
@@ -205,7 +230,11 @@ pub fn materialize(store: &Store, changes: &[Oid]) -> Result<Mat, String> {
             }
             if let Anchor::Line(l) = anchor {
                 if let Some(deleters) = dead.get(l) {
-                    if cs.iter().any(|(p, _, _)| !deleters.contains(p)) {
+                    // finding W9: conflict only for CONCURRENT insert/delete
+                    let conflicted = cs.iter().any(|(p_child, _, _)|
+                        deleters.iter().any(|d|
+                            concurrent(*d, *p_child, &mut memo)));
+                    if conflicted {
                         conflicts.push(V::Arr(vec![V::Text("edit-delete".into()),
                                                    V::Text(path.clone())]));
                     }

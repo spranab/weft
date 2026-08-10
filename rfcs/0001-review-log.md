@@ -153,6 +153,7 @@ surfaced **six defects neither model review caught**:
 | W3 | FATAL | §5.1 `policy_init: <policy-oid>` is a cross-object hash cycle: a policy envelope must bind `repo` (= the genesis OID), so genesis cannot reference it by OID. Same for `config_init`. The A1 fix (`repo: null` on genesis) was necessary but not sufficient — bootstrap *references* cycle too. | **ACCEPT.** Genesis embeds initial policy and config bodies **inline**; their digests, not OIDs, are what later landings chain from. (§5.1) |
 | W4 | MAJOR | §5.10's recursive delta summary is representation-dependent: the same closure reached via different base/add splits yields different summaries (fuzzer T6 proves it). "Load-bearing for cheap equality" is false. | **ACCEPT.** `summary` = digest of the full sorted closure, computable incrementally from the base summary only when splits are append-only along one chain; equality checks MUST use closure digests, never delta-shape. (§5.10) |
 | W5 | FATAL | A single patch cannot create a file and populate it: its `insert` would reference a file-ID containing its own patch OID — a self-hash-cycle. (The concrete manifestation of A2's warning, one level down.) Every scaffold-and-fill change needs two patches under v0.2 rules. | **ACCEPT.** `SELF` sentinel: intra-patch identity references use `[null, ordinal]`, resolved to the enclosing patch's OID after hashing. (§5.8) |
+| W9 | FATAL | §6.3's `edit-delete` class fired on *sequential* history, not just concurrent edits: every multi-line insert is a chain (line N+1 anchors line N), so deleting ANY non-terminal line made the state permanently conflicted — mid-file deletion was effectively impossible. Found when the swarm demo's refactor task was silently rejected as "conflicted" and the stale-read scenario never triggered. | **ACCEPT.** Conflict requires the insert and delete to be **concurrent** — neither patch in the other's dependency closure (memoized reachability over intrinsic deps). Sequential edits are normal history. (§6.3) |
 | W8 | MINOR | §5.5 declared `priority: 0.0-1.0`, but the deterministic-CBOR subset (§4) deliberately excludes floats — the field was unrepresentable. Found when weft-mcp's intent_create hit the canonical encoder. | **ACCEPT.** Integer `priority: 0-100`. (§5.5) |
 | W7 | MINOR | Manifest roots are "over canonical records" but the record *sort order* was unpinned — the Python prototype sorted by Python list comparison, the Rust core by encoded bytes; same conflicts, different roots. Found while porting to Rust. | **ACCEPT.** Normative: records sorted by their canonical CBOR encoding. (§5.11) |
 | W6 | MAJOR | Whole-file `reads` digests make append workflows self-stale: two agents appending to one file each invalidate the other's read of it, though neither invalidated the other's *reasoning*. Observed live in the swarm demo (spurious stale-read warnings on every EOF race). | **MODIFY.** `reads` entries gain optional line-range scope (`{path, lines: [line-ID…], digest}`); gates check region digests when present, whole-file otherwise; a change's own footprint is excluded from its staleness check. (§5.7) |
@@ -165,6 +166,21 @@ a Windows light client re-materialized the Linux gate's state to identical
 manifest roots. Set-semantics ordering was visible in practice: a later
 landing's line sorted *above* an earlier one's at the same anchor, per OID
 order, identically on both OSes.
+
+## Review D — Public positioning review (ChatGPT, 2026-08-10)
+
+After publication, an unsolicited external review (ChatGPT, reading the
+public repo) assessed the technical idea and architecture at 9/10 and raised
+strategy-level findings rather than protocol defects:
+
+| # | Finding | Disposition |
+|---|---|---|
+| D1 | "Version control for AI agents" invites a fight about Git instead of a conversation about verification; position as a **coordination and verification protocol / execution ledger**, with git as import/export. | **ACCEPT.** README, repo description, and pitch reframed; the human-vs-autonomous pipeline diagram added. |
+| D2 | The git bridge is existential for adoption (`weft clone` → agents work → export conventional commits) and belongs at the top of the roadmap, not the bottom. | **ACCEPT.** Roadmap reordered — bridge is the next milestone after this revision. |
+| D3 | Verification quality is the real bottleneck: "who verifies the verifier" (agent writes bug + bad test → 'verified'). Heterogeneous evidence quorums (compiler + tests + property + independent model reviews + runtime traces) with weighted policy. | **ALIGNED.** Already §15's top item (compositional evidence) + attestor trust roots (A14); §15 wording strengthened with the verifier-quorum framing. |
+| D4 | The protocol is sophisticated before there is a killer demo — build the "50 agents, 100 tasks, no branches, no PRs" demonstration with a visible scoreboard. | **ACCEPT.** `weftd/examples/swarm.rs` ships exactly that; gate hardened (per-proposal pre-check, solo bisection on batch evidence failure) so the numbers are honest. |
+| D5 | Instruction provenance deserves headline treatment — protocol-level answer to repository prompt injection. | **ACCEPT.** `/workspace` now labels every file `instruction` vs data from live-line authorship capability chains; weft-mcp banners untrusted files. |
+| D6 | Keep Weft independent of YantrikDB: memory substrate (knows) vs action substrate (did/proved) vs capability substrate (can); interoperate, don't merge. | **ACCEPT** — matches the standing design intent; Weft `note` objects remain the auditable layer YantrikDB may *observe*, never the reverse. |
 
 ## Outcome
 

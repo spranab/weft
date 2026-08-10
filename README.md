@@ -1,20 +1,38 @@
-# Weft — version control for AI agents
+# Weft — the execution ledger for autonomous coding agents
 
 [![CI](https://github.com/spranab/agchub/actions/workflows/ci.yml/badge.svg)](https://github.com/spranab/agchub/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Spec](https://img.shields.io/badge/RFC--0001-v0.3-d9a441.svg)](rfcs/0001-weft-protocol.md)
 
-**Weft is an open-source, self-hosted version control protocol built for
-autonomous coding agents — where verification, not human code review, is the
-merge gate.** Git was created for Linux and human patch flow; Weft is created
-for the agentic world: swarms of AI agents (Claude, GPT, Qwen, or yours)
-working one repository concurrently, merging continuously, with every change
-carrying signed provenance, machine-checkable intent, and evidence.
+**Weft is a coordination and verification protocol for autonomous software
+agents** — an open-source, self-hosted execution ledger where **verification,
+not human code review, is the merge gate**. To humans it presents as version
+control for AI agents; to a swarm of agents (Claude, GPT, Qwen, or yours) it
+is the substrate they coordinate on, prove work against, and land certified
+changes through. Git remains a first-class import/export format, not the
+model.
 
-The name is the mechanism: a loom holds the *warp* under tension while the
-*weft* is woven across it, one pick at a time. Weft's certified landing log is
-the warp; every agent's change is weft beaten into fabric by a verification
-gate. Swarms of threads, one cloth.
+```text
+human software development         autonomous software development
+
+developer                          intent
+   ↓                                  ↓
+branch → commit                    agents acquire scoped capabilities
+   ↓                                  ↓
+pull request                       agents work concurrently
+   ↓                                  ↓
+human review                       changes + read-sets + provenance
+   ↓                                  ↓
+CI                                 evidence
+   ↓                                  ↓
+merge                              verification gate → certified landing
+```
+
+The right-hand pipeline needs no branches and no pull requests — that is the
+thesis. The name is the mechanism: a loom holds the *warp* under tension
+while the *weft* is woven across it, one pick at a time. The certified
+landing log is the warp; every agent's change is weft beaten into fabric by
+a verification gate. Swarms of threads, one cloth.
 
 ## Why not just git + GitHub?
 
@@ -43,6 +61,32 @@ cargo run --release -p weftd            # the hub + gate, port 8747
 You are now the authority root of a Weft repo. Mint a role (Maintainer /
 Contributor / Reader — roles are just capability templates), create an
 intent, and watch agent work land through the approval gate you control.
+
+## See the thesis run
+
+```bash
+cargo run --release -p weftd --example swarm
+```
+
+```text
+weft swarm demo — 50 agents · 100 tasks · 1 repository · no branches · no PRs
+
+  ✓ 82 changes landed across 14 certified landings (6.8s wall)
+  ✓ largest batch: 32 independent changes in ONE landing (commutation)
+  ✓ 2 same-anchor races converged deterministically (order markers)
+  ✗ 8 stale-read changes rejected — reasoning was invalidated by concurrent work
+  ✗ 8 planted bugs rejected by evidence (11 batch bisections isolated them)
+  ✗ 3 revoked-credential attempts refused at certification
+
+  the same workload on git: 100 branches, 100 PRs, and a human week.
+```
+
+Fifty concurrent workers (signing as three different models) hammer one
+repository. Disjoint work commutes into batched certified landings; agents
+whose *observations* went stale under them are caught even though their
+patches don't overlap anything; planted bugs are isolated by binary-search
+bisection of failing batches; revoked credentials bounce at certification.
+Nobody read a diff.
 
 ## For AI agents (MCP)
 
@@ -111,7 +155,8 @@ frontier models (77 findings), an executable prototype (7 more), and CI — all
 | [`weftd`](weftd/) — hub: gate + merge queue, approval-gated landings, governance console | ✅ 2 e2e suites |
 | [`weft-mcp`](weft-mcp/) — agent door over MCP | ✅ e2e-tested |
 | [`prototype/`](prototype/) — original Python executable spec | ✅ kept as reference |
-| `weft` CLI · multi-node sync (§8) · multi-gate quorums · git bridge | 🚧 roadmap |
+| **git bridge** (`weft clone <github repo>` → agents work → export as conventional commits) | 🚧 **next** — interop is the adoption wedge |
+| `weft` CLI · multi-node sync (§8) · multi-gate quorums · heterogeneous evidence quorums | 🚧 roadmap |
 
 ## Keywords
 

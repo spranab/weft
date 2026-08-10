@@ -25,6 +25,8 @@ pub struct Hub {
     pub rejects: Vec<String>,
     pub revoked: BTreeSet<Oid>,
     pub pending: Vec<(Oid, String)>, // (manifest, JSON) awaiting approvals
+    pub cohort: std::collections::BTreeMap<Oid, u64>, // bisection groups after
+    pub next_cohort: u64,                             // batch evidence failure
     pub gate_sk: SigningKey,
     pub gate_pub: [u8; 32],
 }
@@ -140,10 +142,9 @@ fn jfield_oid(j: &serde_json::Value, key: &str) -> Option<Oid> {
 
 // ------------------------------------------------------- approvals --------
 
-/// May this key mint approvals? Authority members always; otherwise any
-/// unrevoked capability chain granting `approve` (roles are capability
-/// templates — RFC §11).
-fn approver_ok(hub: &Hub, author: &[u8], now_ms: i64) -> bool {
+/// Does this key hold `action` — as an authority member or via any live
+/// capability chain? (Roles are capability templates — RFC §11.)
+fn key_has_action(hub: &Hub, author: &[u8], action: &str, now_ms: i64) -> bool {
     if hub.authority.iter().any(|k| k[..] == author[..]) {
         return true;
     }
@@ -151,10 +152,14 @@ fn approver_ok(hub: &Hub, author: &[u8], now_ms: i64) -> bool {
         env.get("type").and_then(V::text) == Some("capability")
             && env.get("body").and_then(|b| b.get("audience")).and_then(V::bytes)
                 == Some(author)
-            && cap_chain_valid_r(&hub.store, cap_oid, author, "approve",
+            && cap_chain_valid_r(&hub.store, cap_oid, author, action,
                                  &BTreeSet::new(), &hub.authority, now_ms,
                                  &hub.revoked).is_ok()
     })
+}
+
+fn approver_ok(hub: &Hub, author: &[u8], now_ms: i64) -> bool {
+    key_has_action(hub, author, "approve", now_ms)
 }
 
 /// Count valid approval evidence bound to this exact manifest (RFC §5.12:
@@ -235,6 +240,8 @@ pub fn new_hub() -> Shared {
         rejects: vec![],
         revoked: BTreeSet::new(),
         pending: vec![],
+        cohort: std::collections::BTreeMap::new(),
+        next_cohort: 0,
         gate_sk,
         gate_pub,
     }))
@@ -242,37 +249,86 @@ pub fn new_hub() -> Shared {
 
 // ------------------------------------------------------------ gate ---------
 
+/// Validate one proposal's delta as a singleton landing against the current
+/// head. Rejecting bad proposals *individually* here means one stale read or
+/// broken auth can never take down innocent batch-mates.
+fn precheck(hub: &mut Hub, delta: &[Oid], ts: i64) -> Vec<String> {
+    let repo = hub.repo.unwrap();
+    let sk = hub.gate_sk.clone();
+    let st = make_state(&sk, repo, hub.head_state, delta, &mut hub.store, 0);
+    let target: Vec<Oid> = state_set(&hub.store, &st).into_iter().collect();
+    let mat = match materialize(&hub.store, &target) {
+        Ok(m) => m,
+        Err(e) => return vec![e],
+    };
+    let (man, man_raw) = make_obj(&sk, Some(repo), "manifest", mat.manifest.clone(), None, 0);
+    let _ = hub.store.put(man_raw);
+    let policy = hub.policy.clone().expect("policy after genesis");
+    let stale = policy.get("stale_reads").and_then(V::text).unwrap_or("reject").to_string();
+    let body = V::map(vec![
+        ("base_state", hub.head_state.map(|s| V::Bytes(s.to_vec())).unwrap_or(V::Null)),
+        ("delta", V::Arr(delta.iter().map(|c| V::Bytes(c.to_vec())).collect())),
+        ("target_state", V::Bytes(st.to_vec())),
+        ("manifest", V::Bytes(man.to_vec())),
+    ]);
+    check_landing_r(&hub.store, &body, &hub.authority, ts, &stale, &hub.revoked).errors
+}
+
 pub fn gate_tick(shared: &Shared) {
-    // drain + batch by disjoint footprints (RFC §7.5)
-    let batch: Vec<(Oid, Vec<Oid>)> = {
+    // pre-check each proposal individually (one stale read never damns
+    // innocents), then batch survivors by disjoint footprints (RFC §7.5).
+    // Proposals from a failed batch carry a bisection cohort id and only
+    // batch with their own cohort — binary search for the guilty change.
+    let groups: Vec<Vec<(Oid, Vec<Oid>)>> = {
         let mut hub = shared.lock().unwrap();
         if hub.repo.is_none() || hub.queue.is_empty() {
             return;
         }
+        let ts = now_ms();
         let pending = std::mem::take(&mut hub.queue);
-        let mut taken = Vec::new();
-        let mut fps: BTreeSet<String> = BTreeSet::new();
-        let mut requeue = Vec::new();
+        let mut by_cohort: std::collections::BTreeMap<u64, Vec<(Oid, Vec<Oid>)>> =
+            std::collections::BTreeMap::new();
         for prop in pending {
             let delta: Vec<Oid> = hub.store.body(&prop)
                 .get("delta").and_then(V::arr).unwrap_or(&[])
                 .iter().map(as_oid).collect();
-            let mine: BTreeSet<String> = delta.iter().flat_map(|c| {
-                hub.store.body(c).get("footprint").and_then(V::arr).unwrap_or(&[])
-                    .iter().filter_map(|p| p.text().map(String::from))
-                    .collect::<Vec<_>>()
-            }).collect();
-            if mine.is_disjoint(&fps) {
-                fps.extend(mine);
-                taken.push((prop, delta));
-            } else {
-                requeue.push(prop);
+            let errs = precheck(&mut hub, &delta, ts);
+            if !errs.is_empty() {
+                let msg = errs.iter().map(|e| format!("\"{}\"", jesc(e)))
+                    .collect::<Vec<_>>().join(",");
+                hub.rejects.push(format!(
+                    "{{\"proposal\":\"{}\",\"errors\":[{msg}]}}", hex(&prop)));
+                hub.cohort.remove(&prop);
+                continue;
+            }
+            let cohort = hub.cohort.get(&prop).copied().unwrap_or(0);
+            by_cohort.entry(cohort).or_default().push((prop, delta));
+        }
+        // within each cohort: disjoint footprints batch, overlaps requeue
+        let mut groups = Vec::new();
+        for (_, members) in by_cohort {
+            let mut fps: BTreeSet<String> = BTreeSet::new();
+            let mut batch = Vec::new();
+            for (prop, delta) in members {
+                let mine: BTreeSet<String> = delta.iter().flat_map(|c| {
+                    hub.store.body(c).get("footprint").and_then(V::arr).unwrap_or(&[])
+                        .iter().filter_map(|p| p.text().map(String::from))
+                        .collect::<Vec<_>>()
+                }).collect();
+                if mine.is_disjoint(&fps) {
+                    fps.extend(mine);
+                    batch.push((prop, delta));
+                } else {
+                    hub.queue.push(prop);
+                }
+            }
+            if !batch.is_empty() {
+                groups.push(batch);
             }
         }
-        hub.queue = requeue;
-        taken
+        groups
     };
-    if !batch.is_empty() {
+    for batch in groups {
         land(shared, batch);
     }
 }
@@ -371,7 +427,25 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
         hub.store.put(ev_raw).expect("evidence stores");
         ev_oids.push(ev);
         if !pass {
-            hub.rejects.push(format!("{{\"seq_attempt\":{seq},\"errors\":[\"evidence failed\"]}}"));
+            if batch.len() > 1 {
+                // bisection: split into two cohorts — innocent halves keep
+                // batching, the guilty change is isolated in log₂ steps
+                let mid = batch.len() / 2;
+                for (i, (p, _)) in batch.iter().enumerate() {
+                    let cid = hub.next_cohort + if i < mid { 1 } else { 2 };
+                    hub.cohort.insert(*p, cid);
+                    hub.queue.push(*p);
+                }
+                hub.next_cohort += 2;
+                hub.rejects.push(format!(
+                    "{{\"seq_attempt\":{seq},\"errors\":[\"batch evidence failed → bisecting {} proposals\"]}}",
+                    batch.len()));
+            } else {
+                hub.cohort.remove(&batch[0].0);
+                hub.rejects.push(format!(
+                    "{{\"proposal\":\"{}\",\"errors\":[\"evidence failed\"]}}",
+                    hex(&batch[0].0)));
+            }
             return;
         }
     }
@@ -402,6 +476,9 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
     hub.head_state = Some(st);
     hub.seq = seq;
     hub.pending.retain(|(m, _)| m != &man);
+    for (p, _) in &batch {
+        hub.cohort.remove(p);
+    }
     let changes_json: Vec<String> = delta.iter().map(|c| {
         let b = hub.store.body(c);
         let model = b.get("provenance").and_then(|p| p.get("model"))
@@ -473,6 +550,12 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
             };
             let target: Vec<Oid> = state_set(&hub.store, &hs).into_iter().collect();
             let mat = materialize(&hub.store, &target).expect("head materializes");
+            let now = now_ms();
+            // instruction provenance (RFC §12.1): a file is instructions only
+            // if EVERY author of its live lines holds `instruct`; otherwise
+            // agents must treat its content as untrusted data
+            let mut instruct_cache: std::collections::BTreeMap<Vec<u8>, bool> =
+                std::collections::BTreeMap::new();
             let mut files = Vec::new();
             for (path, content) in &mat.tree {
                 let fid = mat.file_map.iter()
@@ -480,10 +563,19 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
                     .map(|(f, _)| f).expect("fid for path");
                 let lids: Vec<String> = mat.line_index[path].iter()
                     .map(|(o, n)| format!("[\"{}\",{}]", hex(o), n)).collect();
+                let authors: BTreeSet<Vec<u8>> = mat.line_index[path].iter()
+                    .filter_map(|(poid, _)| hub.store.env.get(poid)
+                        .and_then(|e| e.get("author")).and_then(V::bytes)
+                        .map(|a| a.to_vec())).collect();
+                let instruction = !authors.is_empty() && authors.iter().all(|a| {
+                    *instruct_cache.entry(a.clone()).or_insert_with(
+                        || key_has_action(&hub, a, "instruct", now))
+                });
                 files.push(format!(
-                    "\"{}\":{{\"content\":\"{}\",\"digest\":\"{}\",\"fid\":[\"{}\",{}],\"line_ids\":[{}]}}",
+                    "\"{}\":{{\"content\":\"{}\",\"digest\":\"{}\",\"fid\":[\"{}\",{}],\"instruction\":{},\"line_ids\":[{}]}}",
                     jesc(path), jesc(&String::from_utf8_lossy(content)),
-                    hex(&h(content)), hex(&fid.0), fid.1, lids.join(",")));
+                    hex(&h(content)), hex(&fid.0), fid.1, instruction,
+                    lids.join(",")));
             }
             (200, format!("{{\"seq\":{},\"files\":{{{}}}}}", hub.seq,
                           files.join(",")).into_bytes(), json)

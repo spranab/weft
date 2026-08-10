@@ -621,7 +621,7 @@ CBOR, Merkle-rooted in `manifest.conflict_root`:
 | Kind | Condition | Class |
 |---|---|---|
 | `order` | concurrent inserts at one anchor | **advisory marker** — deterministic OID order applies; State stays clean |
-| `edit-delete` | insert anchored on a tombstoned line | conflict |
+| `edit-delete` | insert anchored on a line whose deletion is **concurrent** with the insert — neither patch in the other's dependency closure (finding W9: sequential history, e.g. deleting a line whose chained successor anchors on it, is normal editing, not a conflict) | conflict |
 | `mode` | line ops concurrent with `to_blob`/`to_lines` | conflict |
 | `edit-rm` | line/tree ops concurrent with `rmfile` of the same file | conflict (finding W2 — v0.2's table had no class for this) |
 | `tree` | same path from two live file-IDs; move-move divergence | conflict — deterministic rename `path~<fid-prefix>` recorded in file map |
@@ -976,9 +976,13 @@ service" — this section is normative for conforming gate implementations.
 
 Priority-ordered; groundwork for the top items is already in v0.2's schema:
 
-1. **Compositional evidence** — certified proofs that survive
-   footprint-disjoint deltas (kills the throughput ceiling of §7.5;
-   `footprint` + `reads` + manifests are the substrate).
+1. **Compositional & heterogeneous evidence** — certified proofs that
+   survive footprint-disjoint deltas (kills the throughput ceiling of §7.5),
+   and the *who-verifies-the-verifier* problem: an agent can write a bug and
+   a bad test that passes. The answer is evidence **diversity** — compiler +
+   tests + property checks + independent model reviews + runtime traces from
+   distinct trust roots, with policy declaring the sufficient quorum.
+   `footprint`, `reads`, manifests, and `distinct_roots` are the substrate.
 2. **Epoch compaction** — signed identity-compaction checkpoints with
    verifiable old→new maps; bounds tombstone growth and heals the formatter
    problem (§6.5).

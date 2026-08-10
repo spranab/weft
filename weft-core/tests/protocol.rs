@@ -264,6 +264,65 @@ fn landing_checklist_end_to_end() {
     assert!(chk2.errors.iter().any(|e| e.contains("footprint mismatch")));
 }
 
+#[test]
+fn stale_read_detected_at_certification() {
+    let mut cx = Ctx::new();
+    let authority = vec![cx.sk.verifying_key().to_bytes().to_vec()];
+    let actor = cx.sk.verifying_key().to_bytes();
+    let cap = cx.publish("capability", V::map(vec![
+        ("audience", V::Bytes(actor.to_vec())),
+        ("parent", V::Null),
+        ("scope", V::map(vec![
+            ("actions", V::Arr(vec![V::Text("publish_change".into())])),
+            ("paths", V::Arr(vec![V::Text("**".into())]))])),
+        ("exp", V::Int(TS + 1_000_000)),
+    ]), None);
+    let sk = cx.sk.clone();
+
+    // base: a.txt with one line; capture its digest (what an agent "read")
+    let (base, p, lids) = cx.base(1, 1);
+    let base_mat = materialize(&cx.store, &base).unwrap();
+    let old_digest = h(&base_mat.tree["f0.txt"]);
+
+    // concurrent refactor changes f0.txt underneath the reader
+    let (_, c_ref) = cx.change(vec![
+        V::Arr(vec![V::Text("delete".into()), id_v(Some(&p), 0),
+                    V::Arr(vec![id_v(Some(&lids[0].0), lids[0].1)])]),
+        V::Arr(vec![V::Text("insert".into()), id_v(Some(&p), 0), start(),
+                    lines(&["refactored"])])], b"refac___");
+    let mut head: Vec<Oid> = base.clone();
+    head.push(c_ref);
+    let st_head = make_state(&sk, REPO, None, &head, &mut cx.store, TS);
+
+    // the stale worker: footprint on a NEW file, reads = old f0.txt digest
+    let p_new = cx.publish("patch", V::map(vec![
+        ("nonce", V::Bytes(b"staleeee".to_vec())),
+        ("ops", V::Arr(vec![
+            V::Arr(vec![V::Text("mkfile".into()), V::Text("new.txt".into())]),
+            V::Arr(vec![V::Text("insert".into()), id_v(None, 0), start(),
+                        lines(&["built on stale assumptions"])])]))]), None);
+    let c_stale = cx.publish("change", V::map(vec![
+        ("patch", V::Bytes(p_new.to_vec())),
+        ("footprint", V::Arr(vec![V::Text("new.txt".into())])),
+        ("reads", V::Arr(vec![V::Arr(vec![
+            V::Text("f0.txt".into()), V::Bytes(old_digest.to_vec())])])),
+        ("message", V::Text("stale".into()))]), Some(cap));
+
+    let st2 = make_state(&sk, REPO, Some(st_head), &[c_stale], &mut cx.store, TS);
+    let t2: Vec<Oid> = state_set(&cx.store, &st2).into_iter().collect();
+    let mat2 = materialize(&cx.store, &t2).unwrap();
+    let man2 = cx.publish("manifest", mat2.manifest.clone(), None);
+    let body = V::map(vec![
+        ("base_state", V::Bytes(st_head.to_vec())),
+        ("delta", V::Arr(vec![V::Bytes(c_stale.to_vec())])),
+        ("target_state", V::Bytes(st2.to_vec())),
+        ("manifest", V::Bytes(man2.to_vec())),
+    ]);
+    let chk = check_landing(&cx.store, &body, &authority, TS + 1, "reject");
+    assert!(chk.errors.iter().any(|e| e.contains("stale read")),
+            "stale read must be rejected, got: {:?}", chk.errors);
+}
+
 // ---------------------------------------------------------- the fuzzer -----
 
 #[test]
