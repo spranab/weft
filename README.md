@@ -171,11 +171,11 @@ frontier models (77 findings), an executable prototype (7 more), and CI — all
 |---|---|
 | [RFC-0001 spec](rfcs/0001-weft-protocol.md) (v0.3) + [review log](rfcs/0001-review-log.md) | ✅ |
 | [`weft-core`](weft-core/) — engine: CBOR, signatures, CRDT + manifests, capabilities, certification | ✅ fuzzed, 9 tests |
-| [`weftd`](weftd/) — hub: gate + merge queue, approval-gated landings, governance console, **crash-durable store** (`--data hub.wal`) and **sandboxed evidence execution** (`--sandbox unshare`) | ✅ 4 e2e suites |
+| [`weftd`](weftd/) — hub: gate + merge queue, approval-gated landings, governance console, **crash-durable store** (`--data`), **sandboxed evidence** (`--sandbox unshare`), **verify-don't-trust replication** (`--follow <peer>`) | ✅ 5 e2e suites |
 | [`weft-mcp`](weft-mcp/) — agent door over MCP | ✅ e2e-tested |
 | [`prototype/`](prototype/) — original Python executable spec | ✅ kept as reference |
 | [`weft-cli`](weft-cli/) — **git bridge** + porcelain: `weft clone <url>` / `weft init --git <dir>` imports a git HEAD through the gate; agents land certified work; `weft export --git <dir>` writes conventional commits with `Weft-Change`/`Weft-Model`/`Weft-Author-Key` trailers, chained onto the original git history, byte-deterministic across re-exports | ✅ round-trip e2e |
-| multi-node sync (§8) · multi-gate quorums · heterogeneous evidence quorums · full-history import | 🚧 roadmap |
+| multi-gate quorums (threshold > 1) · heterogeneous evidence quorums · QUIC/push gossip · full-history git import | 🚧 roadmap |
 
 ## Keywords
 

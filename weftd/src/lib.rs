@@ -2,8 +2,10 @@
 //! a trunk gate running the RFC §7 loop (batch footprint-disjoint proposals,
 //! fix the target state, re-materialize, run the §7.3 checklist, execute the
 //! policy-pinned evidence recipes in a scratch dir, certify a landing), and
-//! a plain HTTP surface. Single-node, threshold-1 certificates; sync frames
-//! and multi-gate quorums are the next milestone.
+//! a plain HTTP surface. Optionally crash-durable (`--data`), sandboxed
+//! (`--sandbox unshare`), and replicating (`--follow <peer>`): a follower
+//! re-verifies the certified chain locally rather than trusting its peer.
+//! Multi-gate quorums (threshold > 1) remain the next milestone.
 
 use ed25519_dalek::SigningKey;
 use std::collections::BTreeSet;
@@ -28,6 +30,7 @@ pub struct Hub {
     pub cohort: std::collections::BTreeMap<Oid, u64>, // bisection groups after
     pub next_cohort: u64,                             // batch evidence failure
     pub readonly: bool,                               // public demo: no writes
+    pub replica: bool,                                // follower: never gates
     pub sandbox: String,                              // evidence exec: none|unshare
     pub gate_sk: SigningKey,
     pub gate_pub: [u8; 32],
@@ -35,13 +38,15 @@ pub struct Hub {
 
 pub type Shared = Arc<Mutex<Hub>>;
 
+pub mod sync;
+
 const DASHBOARD: &str = include_str!("dashboard.html");
 
 pub fn now_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64
 }
 
-fn hex(b: &[u8]) -> String {
+pub(crate) fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
@@ -177,26 +182,34 @@ fn count_approvals(hub: &Hub, man: &Oid, now_ms: i64) -> Vec<Oid> {
     }).collect()
 }
 
+/// Adopt a genesis object: repo id, authority set, initial policy.
+/// `require_gate` is true for hubs that intend to certify (they must be in
+/// the genesis gate set) and false for replicas, which only verify.
+pub(crate) fn adopt_genesis(hub: &mut Hub, oid: &Oid, require_gate: bool)
+        -> Result<(), String> {
+    let env = hub.store.get(oid).clone();
+    if !matches!(env.get("repo"), Some(V::Null)) {
+        return Err("genesis must have repo null".into());
+    }
+    let b = env.get("body").ok_or("no body")?;
+    let gates: Vec<Vec<u8>> = b.get("refs").and_then(|r| r.get("trunk"))
+        .and_then(|t| t.get("gates")).and_then(V::arr).unwrap_or(&[])
+        .iter().filter_map(|g| g.bytes().map(|x| x.to_vec())).collect();
+    if require_gate && !gates.iter().any(|g| g[..] == hub.gate_pub[..]) {
+        return Err("this gate not in genesis".into());
+    }
+    hub.authority = b.get("authority").and_then(V::arr).unwrap_or(&[])
+        .iter().filter_map(|k| k.bytes().map(|x| x.to_vec())).collect();
+    hub.policy = b.get("policy_init").cloned();
+    hub.repo = Some(*oid);
+    Ok(())
+}
+
 /// Post-store side effects: genesis bootstrap and revocation tracking.
-fn apply_side_effects(hub: &mut Hub, oid: &Oid) -> Result<(), String> {
+pub(crate) fn apply_side_effects(hub: &mut Hub, oid: &Oid) -> Result<(), String> {
     let env = hub.store.get(oid).clone();
     match env.get("type").and_then(V::text) {
-        Some("genesis") => {
-            if !matches!(env.get("repo"), Some(V::Null)) {
-                return Err("genesis must have repo null".into());
-            }
-            let b = env.get("body").ok_or("no body")?;
-            let gates: Vec<Vec<u8>> = b.get("refs").and_then(|r| r.get("trunk"))
-                .and_then(|t| t.get("gates")).and_then(V::arr).unwrap_or(&[])
-                .iter().filter_map(|g| g.bytes().map(|x| x.to_vec())).collect();
-            if !gates.iter().any(|g| g[..] == hub.gate_pub[..]) {
-                return Err("this gate not in genesis".into());
-            }
-            hub.authority = b.get("authority").and_then(V::arr).unwrap_or(&[])
-                .iter().filter_map(|k| k.bytes().map(|x| x.to_vec())).collect();
-            hub.policy = b.get("policy_init").cloned();
-            hub.repo = Some(*oid);
-        }
+        Some("genesis") => adopt_genesis(hub, oid, !hub.replica)?,
         Some("revocation") => {
             if let Some(t) = env.get("body").and_then(|b| b.get("target")) {
                 if let Some(bytes) = t.bytes() {
@@ -211,7 +224,7 @@ fn apply_side_effects(hub: &mut Hub, oid: &Oid) -> Result<(), String> {
     Ok(())
 }
 
-fn jesc(s: &str) -> String {
+pub(crate) fn jesc(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     for c in s.chars() {
         match c {
@@ -245,13 +258,14 @@ pub fn new_hub() -> Shared {
         cohort: std::collections::BTreeMap::new(),
         next_cohort: 0,
         readonly: false,
+        replica: false,
         sandbox: "none".into(),
         gate_sk,
         gate_pub,
     }))
 }
 
-fn chg_json(store: &Store, c: &Oid) -> String {
+pub(crate) fn chg_json(store: &Store, c: &Oid) -> String {
     let b = store.body(c);
     format!("{{\"oid\":\"{}\",\"model\":\"{}\",\"message\":\"{}\"}}",
         hex(c),
@@ -282,31 +296,26 @@ fn rebuild_state(hub: &mut Hub) {
             _ => {}
         }
     }
-    let mut landings: Vec<(i64, Oid)> = hub.store.env.iter()
-        .filter(|(_, e)| e.get("type").and_then(V::text) == Some("landing"))
-        .map(|(o, e)| (
-            e.get("body").and_then(|b| b.get("seq")).and_then(V::int).unwrap_or(-1),
-            *o))
-        .collect();
-    landings.sort();
+    // reconstruct the head by walking the CERTIFIED chain and re-verifying
+    // each landing (same path a follower uses) — a stored-but-unverifiable
+    // landing never advances the head, even on local replay
+    let chain = sync::verify_landing_chain(hub);
     let mut landed: BTreeSet<Oid> = BTreeSet::new();
-    for (seq, l) in &landings {
-        let body = hub.store.body(l).clone();
-        let delta: Vec<Oid> = body.get("delta").and_then(V::arr).unwrap_or(&[])
-            .iter().map(as_oid).collect();
-        landed.extend(delta.iter().copied());
-        let changes: Vec<String> = delta.iter()
-            .map(|c| chg_json(&hub.store, c)).collect();
-        hub.log.push(format!(
-            "{{\"seq\":{seq},\"landing\":\"{}\",\"markers\":0,\"warnings\":[],\"changes\":[{}]}}",
-            hex(l), changes.join(",")));
+    let mut cur = chain.head;
+    while let Some(l) = cur {
+        let body = hub.store.body(&l).clone();
+        for c in body.get("delta").and_then(V::arr).unwrap_or(&[]) {
+            landed.insert(as_oid(c));
+        }
+        cur = match body.get("prev") {
+            Some(V::Bytes(p)) => Some(p[..].try_into().unwrap()),
+            _ => None,
+        };
     }
-    if let Some(&(seq, head)) = landings.last() {
-        hub.seq = seq;
-        hub.head = Some(head);
-        hub.head_state = Some(as_oid(
-            hub.store.body(&head).get("target_state").expect("landing target")));
-    }
+    hub.head = chain.head;
+    hub.head_state = chain.head_state;
+    hub.seq = chain.seq;
+    hub.log = chain.log;
     for oid in &oids {
         let e = &hub.store.env[oid];
         if e.get("type").and_then(V::text) != Some("proposal") {
@@ -385,7 +394,7 @@ pub fn gate_tick(shared: &Shared) {
     // batch with their own cohort — binary search for the guilty change.
     let groups: Vec<Vec<(Oid, Vec<Oid>)>> = {
         let mut hub = shared.lock().unwrap();
-        if hub.repo.is_none() || hub.queue.is_empty() {
+        if hub.repo.is_none() || hub.queue.is_empty() || hub.replica {
             return;
         }
         let ts = now_ms();
@@ -904,6 +913,13 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
         }
         ("GET", "/gatekey") => {
             (200, format!("{{\"pub\":\"{}\"}}", hex(&hub.gate_pub)).into_bytes(), json)
+        }
+        ("GET", "/oids") => {
+            // RFC §8 HAVE: the full object inventory. Objects are immutable
+            // and self-verifying, so a follower can diff and fetch freely.
+            let list: Vec<String> = hub.store.env.keys()
+                .map(|o| format!("\"{}\"", hex(o))).collect();
+            (200, format!("{{\"oids\":[{}]}}", list.join(",")).into_bytes(), json)
         }
         ("GET", "/heads") => {
             let l = hub.head.map(|h| format!("\"{}\"", hex(&h))).unwrap_or("null".into());

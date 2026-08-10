@@ -627,11 +627,23 @@
       (<span class="mono">--sandbox unshare</span>, auto-detected) — a test
       that reaches for the network fails, which is the point; the daemon
       warns loudly if it starts unconfined.</p>
-      <p><strong>Still honest about what's missing:</strong> multi-node
-      gossip sync (§8) — today a hub is a single node, and light clients
-      verify its certificates rather than replicating peer-to-peer — plus
-      multi-gate quorums and heterogeneous evidence quorums. Self-hosted use,
-      private networks, and CI-style deployments are real today.</p>
+      <p><strong>Replication is in too.</strong>
+      <span class="mono">weftd --follow https://peer</span> runs a hub as a
+      replica: it bootstraps from genesis over the wire, pulls objects, and
+      then <em>re-derives</em> the certified landing chain itself —
+      re-materializing every state, re-running the certification checklist,
+      and checking that each landing was authored and certified by a key the
+      genesis names. A landing signed by the wrong key, an uncertified
+      landing, and an equivocating pair all fail to advance a follower's
+      head; forks are reported, never silently resolved. Verify, don't
+      trust — <span class="mono">cargo test -p weftd --test replicate</span>
+      is that adversarial case, in code.</p>
+      <p><strong>Still honest about what's missing:</strong> multi-gate
+      quorums (thresholds &gt; 1 are specified but the reference gate signs
+      alone), heterogeneous evidence quorums, and push-based gossip —
+      replication today is pull, over HTTP, rather than the QUIC frames the
+      RFC describes. Self-hosted use, private networks, and CI-style
+      deployments are real today.</p>
     </div>
   </details>
 </section>

@@ -43,6 +43,12 @@ fn main() {
     }
     hub.lock().unwrap().sandbox = mode;
 
+    if let Some(peer) = flag("--follow") {
+        let interval: u64 = flag("--follow-interval")
+            .and_then(|s| s.parse().ok()).unwrap_or(10);
+        eprintln!("weftd: following {peer} every {interval}s (verify-don't-trust replication)");
+        weftd::sync::follow(hub.clone(), peer, interval);
+    }
     let gate = hub.lock().unwrap().gate_pub;
     println!("weftd listening on 0.0.0.0:{port}  gate={}",
              gate.iter().map(|b| format!("{b:02x}")).collect::<String>());

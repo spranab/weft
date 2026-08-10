@@ -64,6 +64,27 @@ network namespace — no network, no privilege, fresh scratch dir per run.
 with a loud warning. **Never expose a writable hub publicly while the
 warning is printing.**
 
+## Replicas (RFC §8)
+
+```bash
+weftd 8748 --data ./replica.wal --follow http://gate-host:8747 --readonly
+```
+
+A follower bootstraps from the peer's genesis, pulls objects (each
+self-verifying on store), then **re-derives the certified landing chain
+locally** — re-materializing every state, re-running the §7.3 checklist, and
+requiring each landing to be authored *and* certified by a key the genesis
+names. It never adopts a peer's claimed head on the peer's word.
+
+- a landing signed by a non-gate key → refused
+- a landing with no gate certificate → refused
+- two certified landings claiming the same slot → **fork reported**, head
+  frozen (a CP trunk must not pick arbitrarily)
+
+Replicas set `replica = true` and never certify, so pointing one at a peer is
+safe by construction. Replication is pull-based over HTTP today; the QUIC
+frames and push subscriptions in RFC §8 are still roadmap.
+
 ## Why a WRITABLE public hub still needs care
 
 1. **Sandbox depth** — namespaces bound network and privilege, not CPU or
