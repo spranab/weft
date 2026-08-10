@@ -1,4 +1,12 @@
 <!doctype html>
+<!--
+  weftd governance console — single file, zero external resources, served at GET /.
+  Notes:
+  - Key→name resolution comes from GET /identities (published identity objects);
+    unresolved keys render as short hex.
+  - Intents close when a landed change carries a `closes` reference (agents do
+    this); the Intents tab renders that state read-only.
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -11,128 +19,681 @@
     --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
   }
   * { box-sizing: border-box; margin: 0; }
-  body { background: var(--bg); color: var(--text); font: 14px/1.55 var(--mono); padding: 1.2rem; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.55 var(--mono); padding: 1.2rem; display: flex; flex-direction: column; min-height: 100vh; }
   h1 { font-size: 1.05rem; letter-spacing: .04em; }
   h1 .thread { color: var(--accent); }
   h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin-bottom: .6rem; }
   header { display: flex; gap: 1.4rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 1.1rem; }
   header .stat b { color: var(--accent); font-weight: 600; }
+  .dot { width: .55em; height: .55em; border-radius: 50%; display: inline-block; background: var(--ok); }
+  .dot.bad { background: var(--bad); }
+  .app { display: flex; gap: 1rem; align-items: flex-start; flex: 1; }
+  nav { display: flex; flex-direction: column; gap: .3rem; min-width: 9.5rem; position: sticky; top: 1rem; }
+  nav .tab { background: none; border: 1px solid transparent; color: var(--dim); font: inherit; text-align: left; padding: .35rem .7rem; border-radius: 6px; cursor: pointer; }
+  nav .tab:hover { color: var(--text); }
+  nav .tab.active { color: var(--accent); border-color: var(--line); background: var(--panel); }
+  main { flex: 1; min-width: 0; }
   .grid { display: grid; grid-template-columns: minmax(0,3fr) minmax(0,2fr); gap: 1rem; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,2fr); gap: 1rem; }
+  @media (max-width: 900px) {
+    .grid, .grid2 { grid-template-columns: 1fr; }
+    .app { flex-direction: column; }
+    nav { flex-direction: row; flex-wrap: wrap; position: static; }
+  }
   section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem; margin-bottom: 1rem; overflow-x: auto; }
   .landing { border-left: 3px solid var(--accent); padding: .45rem .7rem; margin: .5rem 0; background: rgba(217,164,65,.05); }
   .landing .seq { color: var(--accent); }
   .chg { cursor: pointer; padding: .1rem 0 .1rem 1rem; }
   .chg:hover { color: var(--accent); }
-  .chg .model { color: var(--ok); }
-  .chg .model.human { color: var(--dim); }
+  .chg.flat { cursor: default; }
+  .chg.flat:hover { color: inherit; }
+  .model { color: var(--ok); }
+  .model.human { color: var(--dim); }
   .oid { color: var(--dim); }
   .warn { color: var(--bad); padding-left: 1rem; font-size: .85em; }
   pre.file { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .6rem .8rem; margin: .4rem 0 1rem; overflow-x: auto; }
   .cap { border-left: 2px solid var(--line); margin: .35rem 0 .35rem .4rem; padding: .25rem .7rem; }
   .cap.root { border-left-color: var(--ok); }
+  .cap.revoked { opacity: .55; }
+  .cap.revoked .who, .cap.revoked .scope { text-decoration: line-through; }
   .cap .who { color: var(--text); }
   .cap .scope { color: var(--dim); font-size: .85em; }
   .badge { display: inline-block; border: 1px solid var(--ok); color: var(--ok); border-radius: 4px; font-size: .7em; padding: 0 .35em; letter-spacing: .06em; }
+  .chip { display: inline-block; border: 1px solid var(--dim); color: var(--dim); border-radius: 4px; font-size: .72em; padding: 0 .4em; letter-spacing: .05em; vertical-align: middle; }
+  .chip.ok { border-color: var(--ok); color: var(--ok); }
+  .chip.bad { border-color: var(--bad); color: var(--bad); }
+  .chip.amber { border-color: var(--accent); color: var(--accent); }
+  .card { border: 1px solid var(--line); border-radius: 6px; padding: .5rem .7rem; margin: .45rem 0; }
+  .pend { border-left: 3px solid var(--accent); background: rgba(217,164,65,.06); padding: .45rem .7rem; margin: .4rem 0; border-radius: 0 6px 6px 0; }
+  .btn { background: rgba(217,164,65,.08); border: 1px solid var(--accent); color: var(--accent); font: inherit; font-size: .85em; padding: .25rem .7rem; border-radius: 6px; cursor: pointer; }
+  .btn:hover:not(:disabled) { background: rgba(217,164,65,.18); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; border-color: var(--dim); color: var(--dim); }
+  .btn.small { font-size: .75em; padding: .05rem .5rem; }
+  input, textarea, select { background: var(--bg); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: .9em; border-radius: 6px; padding: .35rem .55rem; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  textarea { min-height: 4.5em; resize: vertical; width: 100%; }
+  .row { display: flex; gap: .7rem; flex-wrap: wrap; align-items: flex-end; margin: .45rem 0; }
+  label.f { display: flex; flex-direction: column; gap: .15rem; font-size: .78em; color: var(--dim); }
+  .filelink { cursor: pointer; padding: .12rem .35rem; border-radius: 4px; }
+  .filelink:hover { color: var(--accent); }
+  .filelink.sel { color: var(--accent); background: rgba(217,164,65,.08); }
+  .keyhex { word-break: break-all; color: var(--accent); font-size: .85em; }
+  .danger { color: var(--bad); font-size: .8em; margin-top: .5rem; }
+  .dim { color: var(--dim); }
   .empty { color: var(--dim); font-style: italic; }
+  .banner { background: rgba(207,106,106,.1); border: 1px solid var(--bad); color: var(--bad); padding: .5rem .8rem; border-radius: 8px; margin-bottom: 1rem; }
+  #toasts { position: fixed; top: 1rem; right: 1rem; display: flex; flex-direction: column; gap: .5rem; z-index: 99; max-width: 22rem; }
+  .toast { padding: .5rem .8rem; border-radius: 6px; border: 1px solid var(--ok); color: var(--ok); background: var(--panel); font-size: .85em; word-break: break-word; }
+  .toast.err { border-color: var(--bad); color: var(--bad); }
   footer { color: var(--dim); font-size: .8em; margin-top: .5rem; }
 </style>
 </head>
 <body>
+<div id="edbanner" class="banner" style="display:none">⚠ this browser does not support
+Ed25519 in WebCrypto — signing is disabled, the console is read-only</div>
 <header>
   <h1><span class="thread">🧵 weft</span> / governance</h1>
-  <span class="stat">trunk seq <b id="seq">–</b></span>
-  <span class="stat">queued <b id="queued">–</b></span>
-  <span class="stat" id="gate"></span>
+  <span class="stat">repo <b id="st-repo">–</b></span>
+  <span class="stat">trunk seq <b id="st-seq">–</b></span>
+  <span class="stat">queued <b id="st-queued">–</b></span>
+  <span class="stat">gate <b id="st-gate">–</b></span>
+  <span class="dot" id="conn" title="daemon connection"></span>
 </header>
-<div class="grid">
-  <div>
-    <section>
-      <h2>Certified landing log</h2>
-      <div id="log" class="empty">no landings yet</div>
-    </section>
-    <section>
-      <h2>Workspace (head)</h2>
-      <div id="ws" class="empty">empty</div>
-    </section>
-  </div>
-  <div>
-    <section>
-      <h2>Provenance <span class="oid" id="prov-target"></span></h2>
-      <div id="prov" class="empty">click a change to walk its capability chain
-        to the authority root</div>
-    </section>
-    <section>
-      <h2>Rejections</h2>
-      <div id="rejects" class="empty">none</div>
-    </section>
+
+<div class="app">
+<nav>
+  <button class="tab active" data-tab="overview" onclick="show('overview')">Overview</button>
+  <button class="tab" data-tab="intents" onclick="show('intents')">Intents</button>
+  <button class="tab" data-tab="files" onclick="show('files')">Files</button>
+  <button class="tab" data-tab="access" onclick="show('access')">Access</button>
+  <button class="tab" data-tab="policy" onclick="show('policy')">Policy</button>
+</nav>
+<main>
+
+<!-- ══ OVERVIEW ══ -->
+<div id="tab-overview" class="tabpane">
+  <section id="pending-sec" style="display:none">
+    <h2>Pending approvals</h2>
+    <div id="pending"></div>
+  </section>
+  <div class="grid">
+    <div>
+      <section>
+        <h2>Certified landing log</h2>
+        <div id="log" class="empty">no landings yet</div>
+      </section>
+    </div>
+    <div>
+      <section>
+        <h2>Provenance <span class="oid" id="prov-target"></span></h2>
+        <div id="prov" class="empty">click a change to walk its capability chain
+          to the authority root</div>
+      </section>
+      <section>
+        <h2>Rejections</h2>
+        <div id="rejects" class="empty">none</div>
+      </section>
+    </div>
   </div>
 </div>
-<footer>read-only surface — every mutation below this UI requires a signed
-capability chain; the UI renders the graph, it never owns it (RFC-0001 §11)</footer>
+
+<!-- ══ INTENTS ══ -->
+<div id="tab-intents" class="tabpane" style="display:none">
+  <section>
+    <h2>Create intent</h2>
+    <div class="row">
+      <label class="f">title<input id="in-title" size="32" placeholder="short task name"></label>
+      <label class="f">goal<input id="in-goal" size="44" placeholder="what done looks like"></label>
+    </div>
+    <label class="f">acceptance criteria — one per line
+      <textarea id="in-criteria" placeholder="tests pass&#10;no new clippy warnings"></textarea></label>
+    <div class="row"><button class="btn needs-key" onclick="createIntent(this)">Sign &amp; publish intent</button></div>
+  </section>
+  <section>
+    <h2>Intents</h2>
+    <div id="intents" class="empty">none yet</div>
+  </section>
+</div>
+
+<!-- ══ FILES ══ -->
+<div id="tab-files" class="tabpane" style="display:none">
+  <div class="grid2">
+    <div>
+      <section>
+        <h2>Workspace <span class="oid">head seq <span id="files-seq">–</span></span></h2>
+        <div id="filelist" class="empty">no files at head</div>
+      </section>
+    </div>
+    <div>
+      <section>
+        <h2>File <span class="oid" id="file-name"></span></h2>
+        <div id="fileview" class="empty">select a file</div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ACCESS ══ -->
+<div id="tab-access" class="tabpane" style="display:none">
+  <section id="repo-create" style="display:none">
+    <h2>Create repository</h2>
+    <p class="dim" style="font-size:.85em">No repository exists on this daemon yet.
+      Minting genesis writes <em>this browser's key</em> into the authority set —
+      you become the root of trust that every capability chain must terminate at.</p>
+    <div class="row">
+      <label class="f">repository name<input id="repo-name" size="24" placeholder="my-swarm"></label>
+      <button class="btn needs-key" onclick="createRepo(this)">Sign genesis</button>
+    </div>
+  </section>
+  <section>
+    <h2>Identity</h2>
+    <div id="ident"></div>
+  </section>
+  <section>
+    <h2>Role console — capability minting</h2>
+    <p class="dim" style="font-size:.8em;margin-bottom:.4rem">roles are minting templates
+      over the capability graph — there is no user database behind this form (RFC-0001 §11)</p>
+    <div class="row">
+      <label class="f">role template
+        <select id="role-sel" onchange="roleChanged()">
+          <option value="maintainer">Maintainer</option>
+          <option value="contributor">Contributor</option>
+          <option value="reader">Reader</option>
+          <option value="custom">Custom</option>
+        </select></label>
+      <label class="f">audience public key (64 hex)
+        <input id="role-aud" size="50" placeholder="agent or human Ed25519 pubkey"></label>
+      <label class="f">expiry
+        <select id="role-exp">
+          <option value="3600000">1h</option>
+          <option value="86400000" selected>24h</option>
+          <option value="604800000">7d</option>
+          <option value="2592000000">30d</option>
+        </select></label>
+    </div>
+    <div class="row" id="role-paths-row" style="display:none">
+      <label class="f">paths — comma-separated globs
+        <input id="role-paths" size="40" value="src/**"></label>
+    </div>
+    <div class="row" id="role-actions-row" style="display:none"><span id="role-actions"></span></div>
+    <div class="row"><button class="btn needs-key" onclick="mintCap(this)">Mint capability</button></div>
+  </section>
+  <section>
+    <h2>Capabilities</h2>
+    <div id="caps" class="empty">none</div>
+  </section>
+</div>
+
+<!-- ══ POLICY ══ -->
+<div id="tab-policy" class="tabpane" style="display:none">
+  <section>
+    <h2>Repository policy <span class="chip">read-only</span></h2>
+    <div id="policy" class="empty">loading…</div>
+  </section>
+</div>
+
+</main>
+</div>
+
+<footer>every mutation minted above this line requires a signed capability chain;
+the UI renders the graph, it never owns it (RFC-0001 §11)</footer>
+<div id="toasts"></div>
+
 <script>
+"use strict";
+/* ── state ─────────────────────────────────────────────────────── */
+let KEY = null;        // Ed25519 private CryptoKey (never leaves this page)
+let PUB = null;        // 64-char hex public key
+let EDOK = true;       // WebCrypto Ed25519 available
+let REPO = null;       // repo oid hex or null (no genesis yet)
+let GATE = null;       // gate pubkey hex
+let TAB = "overview";
+let FILELIST = [];
+const ACTIONS = ["publish_change","propose","approve","delegate","create_intent","policy","read"];
+const ROLES = {
+  maintainer:  { actions: ["publish_change","propose","approve","delegate","create_intent","policy"], paths: ["**"] },
+  contributor: { actions: ["publish_change","propose"], paths: null },   // paths from input
+  reader:      { actions: ["read"], paths: ["**"] },
+};
+
+/* ── tiny helpers ──────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
-const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;")
+  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const hx = s => String(s || "").replace(/[^0-9a-fA-F]/g, "").toLowerCase();
+const short = (h, n = 10) => h ? hx(h).slice(0, n) + "…" : "–";
+const toHex = b => [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+const fromHex = h => new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
+const b64uToBytes = s => { s = s.replace(/-/g,"+").replace(/_/g,"/");
+  while (s.length % 4) s += "="; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
 
-async function j(path) { return (await fetch(path)).json(); }
+async function jget(p) {
+  const r = await fetch(p);
+  if (!r.ok) throw new Error(`${p} → HTTP ${r.status}`);
+  return r.json();
+}
+async function jpost(p, body) {
+  const r = await fetch(p, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let d = null; try { d = await r.json(); } catch (_) {}
+  if (d && d.error) throw new Error(d.error);
+  if (!r.ok) throw new Error(`${p} → HTTP ${r.status}`);
+  return d;
+}
+function toast(msg, ok) {
+  const t = document.createElement("div");
+  t.className = "toast" + (ok ? "" : " err");
+  t.textContent = msg;
+  $("toasts").appendChild(t);
+  setTimeout(() => t.remove(), 4500);
+}
+/* run fn with a "signing…" state on btn; errors → toast */
+async function signed(btn, fn) {
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = "signing…";
+  try { await fn(); }
+  catch (e) { toast(e.message || String(e), false); }
+  finally { btn.disabled = false; btn.textContent = old; gateButtons(); }
+}
+function gateButtons() {
+  document.querySelectorAll(".needs-key").forEach(b => {
+    b.disabled = !KEY;
+    b.title = KEY ? "" : "generate an identity key in the Access tab first";
+  });
+}
+function needRepo() {
+  if (!REPO) throw new Error("no repository yet — mint genesis in the Access tab first");
+  return REPO;
+}
 
-async function refresh() {
-  const heads = await j("/heads");
-  $("seq").textContent = heads.seq;
-  const log = await j("/log");
-  $("queued").textContent = log.queued;
-  if (log.log.length) {
-    $("log").classList.remove("empty");
-    $("log").innerHTML = log.log.slice().reverse().map(e => `
+/* ── keys: generate / persist / reimport; private key never leaves page ── */
+async function probeEd() {
+  try { await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign","verify"]);
+    return true; } catch (_) { return false; }
+}
+async function loadKey() {
+  const b64 = localStorage.getItem("weft-key");
+  if (!b64) return;
+  try {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const priv = await crypto.subtle.importKey("pkcs8", bytes.buffer,
+      { name: "Ed25519" }, true, ["sign"]);
+    const jwk = await crypto.subtle.exportKey("jwk", priv); // jwk.x = public half
+    PUB = toHex(b64uToBytes(jwk.x));
+    KEY = priv;
+  } catch (e) { toast("stored key unusable: " + e.message, false); }
+}
+async function genKey(btn) {
+  if (!EDOK) { toast("Ed25519 unsupported in this browser", false); return; }
+  if (KEY && !confirm("Replace the existing key? The old private key cannot be recovered and everything delegated to it will dangle.")) return;
+  try {
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign","verify"]);
+    PUB = toHex(new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)));
+    const p8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
+    localStorage.setItem("weft-key", btoa(String.fromCharCode(...p8)));
+    KEY = kp.privateKey;
+    toast("key generated — pub " + short(PUB, 12), true);
+    renderIdentity(); gateButtons();
+  } catch (e) { toast("keygen failed: " + e.message, false); }
+}
+
+/* ── key → name resolution from published identity objects ─────── */
+let NAMES = {};
+async function syncNames() {
+  try {
+    const d = await jget("/identities");
+    NAMES = {};
+    (d.identities || []).forEach(i => { if (i.name) NAMES[i.pub] = i.name; });
+  } catch (_) {}
+}
+const who = (k, n = 12) =>
+  NAMES[k] ? `${esc(NAMES[k])} <span class="oid">(${short(k, 8)})</span>` : short(k, n);
+
+/* ── generic mint: prepare → sign → submit (same ts both calls) ── */
+async function publish(type, body, repoHex) {
+  if (!EDOK) throw new Error("Ed25519 unsupported — signing disabled");
+  if (!KEY) throw new Error("no signing key — generate one in the Access tab");
+  const ts = Date.now();
+  const env = { repo: repoHex ? "hex:" + repoHex : null, type, ts,
+    author: "hex:" + PUB, auth: null, body };
+  const prep = await jpost("/prepare", env);
+  const sig = new Uint8Array(await crypto.subtle.sign("Ed25519", KEY, fromHex(hx(prep.payload))));
+  const res = await jpost("/submit", Object.assign({}, env, { sig: "hex:" + toHex(sig) }));
+  return res.oid;
+}
+
+/* ── tabs ──────────────────────────────────────────────────────── */
+const LOADERS = { overview: loadOverview, intents: loadIntents,
+  files: loadFiles, access: loadAccess, policy: loadPolicy };
+function show(tab) {
+  TAB = tab;
+  document.querySelectorAll("nav .tab").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll(".tabpane").forEach(p =>
+    p.style.display = p.id === "tab-" + tab ? "" : "none");
+  LOADERS[tab]().catch(e => toast(e.message, false));
+}
+
+/* ── shared renders ────────────────────────────────────────────── */
+const modelChip = m => `<span class="model ${m === "none" ? "human" : ""}">${
+  esc(m === "none" ? "human/authority" : m)}</span>`;
+const chgRow = (c, click) => `<div class="chg${click ? "" : " flat"}"${
+  click ? ` onclick="prov('${hx(c.oid)}')"` : ""}><span class="oid">chg_${
+  short(c.oid)}</span> ${modelChip(c.model)} “${esc(c.message)}”</div>`;
+
+/* ── OVERVIEW ──────────────────────────────────────────────────── */
+async function loadOverview() {
+  const [heads, log, pending] = await Promise.all(
+    [jget("/heads"), jget("/log"), jget("/pending")]);
+  $("conn").classList.remove("bad");
+  $("st-seq").textContent = heads.seq;
+  $("st-queued").textContent = log.queued;
+  renderPending(pending.pending || []);
+  renderLog(log);
+}
+function renderPending(list) {
+  $("pending-sec").style.display = list.length ? "" : "none";
+  if (!list.length) return;
+  $("pending").innerHTML = list.map(p => `
+    <div class="pend">
+      <div><span class="oid">mfst_${short(p.manifest, 12)}</span>
+        <span class="chip amber">approvals ${p.have | 0}/${p.need | 0}</span>
+        <button class="btn small"${KEY ? "" :
+          ' disabled title="generate an identity key in the Access tab first"'
+        } onclick="approvePending(this,'${hx(p.manifest)}')">Approve &amp; sign</button></div>
+      ${(p.changes || []).map(c => chgRow(c, false)).join("")}
+    </div>`).join("");
+}
+async function approvePending(btn, manifest) {
+  await signed(btn, async () => {
+    const oid = await publish("evidence", {
+      manifest: "hex:" + manifest,
+      recipe: { kind: "approval" },
+      results: [{ status: "pass" }],
+    }, needRepo());
+    toast("approval evidence signed → evd_" + short(oid), true);
+    loadOverview().catch(() => {});
+  });
+}
+function renderLog(log) {
+  const el = $("log");
+  if (!log.log.length) { el.className = "empty"; el.textContent = "no landings yet"; }
+  else {
+    el.className = "";
+    el.innerHTML = log.log.slice().reverse().map(e => `
       <div class="landing">
-        <div><span class="seq">seq ${e.seq}</span>
-          <span class="oid">lnd_${e.landing.slice(0,10)}…</span>
-          ${e.markers ? `· ${e.markers} order marker(s)` : ""}</div>
-        ${e.changes.map(c => `
-          <div class="chg" onclick="prov('${c.oid}')">
-            <span class="oid">chg_${c.oid.slice(0,10)}…</span>
-            <span class="model ${c.model === "none" ? "human" : ""}">${esc(
-              c.model === "none" ? "human/authority" : c.model)}</span>
-            “${esc(c.message)}”</div>`).join("")}
+        <div><span class="seq">seq ${e.seq | 0}</span>
+          <span class="oid">lnd_${short(e.landing)}</span>
+          ${e.markers ? `· ${e.markers | 0} order marker(s)` : ""}</div>
+        ${e.changes.map(c => chgRow(c, true)).join("")}
         ${e.warnings.map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join("")}
       </div>`).join("");
   }
-  if (log.rejects.length) {
-    $("rejects").classList.remove("empty");
-    $("rejects").innerHTML = log.rejects.map(r =>
+  const rj = $("rejects");
+  if (!log.rejects.length) { rj.className = "empty"; rj.textContent = "none"; }
+  else {
+    rj.className = "";
+    rj.innerHTML = log.rejects.map(r =>
       `<div class="warn">${esc(JSON.stringify(r))}</div>`).join("");
   }
-  const ws = await j("/workspace");
-  const files = Object.entries(ws.files);
-  if (files.length) {
-    $("ws").classList.remove("empty");
-    $("ws").innerHTML = files.map(([path, f]) =>
-      `<div><span class="oid">${esc(path)}</span> · ${f.line_ids.length} line(s)</div>
-       <pre class="file">${esc(f.content)}</pre>`).join("");
-  }
 }
-
 async function prov(oid) {
-  $("prov-target").textContent = `chg_${oid.slice(0, 10)}…`;
-  const p = await j(`/provenance/${oid}`);
-  $("prov").classList.remove("empty");
-  $("prov").innerHTML = `
-    <div>model <span class="model">${esc(p.model)}</span> ·
-      key <span class="oid">${p.author.slice(0, 12)}…</span></div>
-    <div class="oid">footprint ${esc(JSON.stringify(p.footprint))}</div>
-    ${p.chain.map(c => `
-      <div class="cap ${c.root ? "root" : ""}">
-        <div class="who">cap_${c.oid.slice(0, 10)}… ${c.root
-          ? '<span class="badge">AUTHORITY ROOT</span>' : ""}</div>
-        <div class="scope">issuer ${c.issuer.slice(0, 12)}… →
-          audience ${c.audience.slice(0, 12)}…</div>
-        <div class="scope">actions ${esc(c.actions.join(", "))} ·
-          paths ${esc(c.paths.join(", "))}</div>
-      </div>`).join("")}`;
+  try {
+    const p = await jget("/provenance/" + hx(oid));
+    $("prov-target").textContent = "chg_" + short(oid);
+    const pv = $("prov");
+    pv.className = "";
+    pv.innerHTML = `
+      <div>${modelChip(p.model)} · key <span class="oid">${short(p.author, 12)}</span></div>
+      <div>“${esc(p.message)}”</div>
+      <div class="oid">footprint ${esc((p.footprint || []).join(", ") || "–")}</div>
+      ${(p.chain || []).map(c => `
+        <div class="cap ${c.root ? "root" : ""}">
+          <div class="who">cap_${short(c.oid)} ${c.root
+            ? '<span class="badge">AUTHORITY ROOT</span>' : ""}</div>
+          <div class="scope">issuer ${who(c.issuer)} →
+            audience ${who(c.audience)}</div>
+          <div class="scope">actions ${esc((c.actions || []).join(", "))} ·
+            paths ${esc((c.paths || []).join(", "))}</div>
+        </div>`).join("")}`;
+  } catch (e) { toast(e.message, false); }
 }
 
-refresh();
-setInterval(refresh, 2000);
+/* ── INTENTS ───────────────────────────────────────────────────── */
+async function loadIntents() {
+  const d = await jget("/intents");
+  const el = $("intents");
+  if (!d.intents.length) { el.className = "empty"; el.textContent = "none yet"; return; }
+  el.className = "";
+  el.innerHTML = d.intents.map(i => `
+    <div class="card">
+      <div><span class="chip ${i.closed ? "" : "ok"}">${i.closed ? "closed" : "open"}</span>
+        <b>${esc(i.title)}</b> <span class="oid">int_${short(i.oid)}</span></div>
+      <div class="dim" style="font-size:.9em">${esc(i.goal)}</div>
+      ${(i.criteria || []).map(c => `<div class="dim" style="font-size:.85em;padding-left:1em">· ${esc(c)}</div>`).join("")}
+      <div class="oid" style="font-size:.8em">ref ${esc(i.ref)} · author ${short(i.author, 12)}</div>
+    </div>`).join("");
+}
+async function createIntent(btn) {
+  const title = $("in-title").value.trim();
+  const goal = $("in-goal").value.trim();
+  const criteria = $("in-criteria").value.split("\n").map(s => s.trim()).filter(Boolean);
+  if (!title) { toast("intent needs a title", false); return; }
+  await signed(btn, async () => {
+    const oid = await publish("intent", {
+      ref: "trunk", title, goal, constraints: [],
+      criteria: criteria.map(desc => ({ desc })), priority: 0.5,
+    }, needRepo());
+    toast("intent published → int_" + short(oid), true);
+    $("in-title").value = ""; $("in-goal").value = ""; $("in-criteria").value = "";
+    loadIntents().catch(() => {});
+  });
+}
+
+/* ── FILES ─────────────────────────────────────────────────────── */
+async function loadFiles() {
+  const ws = await jget("/workspace");
+  $("files-seq").textContent = ws.seq;
+  FILELIST = Object.entries(ws.files || {});
+  const el = $("filelist");
+  if (!FILELIST.length) { el.className = "empty"; el.textContent = "no files at head"; return; }
+  el.className = "";
+  el.innerHTML = FILELIST.map(([path, f], i) => `
+    <div class="filelink" id="fl-${i}" onclick="viewFile(${i})">${esc(path)}
+      <span class="oid">· ${f.line_ids.length} line(s)</span></div>`).join("");
+}
+function viewFile(i) {
+  const entry = FILELIST[i];
+  if (!entry) return;
+  const [path, f] = entry;
+  document.querySelectorAll(".filelink").forEach(el => el.classList.remove("sel"));
+  const link = $("fl-" + i); if (link) link.classList.add("sel");
+  $("file-name").textContent = path;
+  const fv = $("fileview");
+  fv.className = "";
+  fv.innerHTML = `
+    <div class="oid" style="font-size:.85em">${f.line_ids.length} line(s) ·
+      digest ${short(f.digest, 14)} · fid ${short(f.fid && f.fid[0], 10)}#${
+      esc(f.fid ? f.fid[1] : "?")}</div>
+    <pre class="file">${esc(f.content)}</pre>`;
+}
+
+/* ── ACCESS ────────────────────────────────────────────────────── */
+async function loadAccess() {
+  await syncPolicy();
+  await syncNames();
+  $("repo-create").style.display = REPO ? "none" : "";
+  renderIdentity();
+  renderRoleActions();
+  const el = $("caps");
+  if (!REPO) { el.className = "empty"; el.textContent = "no repository — no capability graph yet"; return; }
+  const d = await jget("/caps");
+  if (!d.caps.length) { el.className = "empty"; el.textContent = "none"; return; }
+  el.className = "";
+  el.innerHTML = d.caps.map(c => `
+    <div class="cap card ${c.revoked ? "revoked" : ""}">
+      <div class="who">cap_${short(c.oid)}
+        ${c.revoked ? '<span class="chip bad">REVOKED</span>'
+          : `<span class="oid" data-exp="${+c.exp || 0}">${fmtExp(c.exp)}</span>
+             ${KEY ? `<button class="btn small" onclick="revokeCap(this,'${hx(c.oid)}')">Revoke</button>` : ""}`}</div>
+      <div class="scope">issuer ${who(c.issuer)} → audience ${who(c.audience)}</div>
+      <div class="scope">actions ${esc((c.actions || []).join(", "))} ·
+        paths ${esc((c.paths || []).join(", "))}</div>
+      <div class="scope">${c.parent ? "parent cap_" + short(c.parent) : "direct issue (no parent)"}</div>
+    </div>`).join("");
+}
+function renderIdentity() {
+  $("ident").innerHTML = KEY ? `
+    <div class="oid" style="font-size:.8em">public key — share this; the private half never leaves the page</div>
+    <div class="keyhex">${esc(PUB)}</div>
+    <div class="row">
+      <label class="f">display name<input id="id-name" size="20" placeholder="e.g. pranab"></label>
+      <button class="btn needs-key" onclick="publishIdentity(this)">Publish identity</button>
+      <button class="btn" onclick="genKey(this)">Rotate key</button>
+    </div>
+    <div class="danger">⚠ DANGER — this key lives only in this browser's localStorage.
+      Clearing site data destroys it; anyone using this profile can sign as you.</div>`
+  : `
+    <div class="empty">no signing key in this browser</div>
+    <div class="row"><button class="btn" onclick="genKey(this)"${EDOK ? "" :
+      ' disabled title="Ed25519 unsupported in this browser"'}>Generate Ed25519 key</button></div>
+    <div class="danger">⚠ the key is minted and stored in this browser only —
+      it is your entire identity on the wire</div>`;
+}
+async function publishIdentity(btn) {
+  const name = $("id-name").value.trim();
+  if (!name) { toast("identity needs a name", false); return; }
+  await signed(btn, async () => {
+    const oid = await publish("identity", { kind: "human", name }, needRepo());
+    toast("identity published → idn_" + short(oid), true);
+    await syncNames();
+    loadAccess().catch(() => {});
+  });
+}
+function renderRoleActions() {
+  if ($("role-actions").children.length) return;
+  $("role-actions").innerHTML = ACTIONS.map(a =>
+    `<label style="font-size:.8em;color:var(--dim);margin-right:.8rem">
+      <input type="checkbox" id="act-${a}"> ${a}</label>`).join("");
+}
+function roleChanged() {
+  const r = $("role-sel").value;
+  $("role-paths-row").style.display = (r === "contributor" || r === "custom") ? "" : "none";
+  $("role-actions-row").style.display = r === "custom" ? "" : "none";
+}
+async function mintCap(btn) {
+  const role = $("role-sel").value;
+  const aud = hx($("role-aud").value);
+  if (aud.length !== 64) { toast("audience must be a 64-hex-char Ed25519 public key", false); return; }
+  let actions, paths;
+  if (role === "custom") {
+    actions = ACTIONS.filter(a => $("act-" + a).checked);
+    paths = $("role-paths").value.split(",").map(s => s.trim()).filter(Boolean);
+    if (!actions.length) { toast("pick at least one action", false); return; }
+    if (!paths.length) { toast("give at least one path glob", false); return; }
+  } else {
+    actions = ROLES[role].actions;
+    paths = ROLES[role].paths ||
+      $("role-paths").value.split(",").map(s => s.trim()).filter(Boolean);
+    if (!paths.length) paths = ["src/**"];
+  }
+  await signed(btn, async () => {
+    const oid = await publish("capability", {
+      audience: "hex:" + aud, parent: null,
+      scope: { actions, paths },
+      exp: Date.now() + (+$("role-exp").value),
+      meta: { reason: role },
+    }, needRepo());
+    toast(role + " capability minted → cap_" + short(oid), true);
+    loadAccess().catch(() => {});
+  });
+}
+async function revokeCap(btn, capOid) {
+  const reason = prompt("Reason for revocation (recorded in the signed object):");
+  if (reason === null) return;
+  await signed(btn, async () => {
+    const oid = await publish("revocation",
+      { target: "hex:" + capOid, reason: reason || "revoked via governance console" },
+      needRepo());
+    toast("revocation signed → rvk_" + short(oid), true);
+    loadAccess().catch(() => {});
+  });
+}
+async function createRepo(btn) {
+  const name = $("repo-name").value.trim() || "weft-repo";
+  await signed(btn, async () => {
+    if (!GATE) GATE = (await jget("/gatekey")).pub;
+    const oid = await publish("genesis", {
+      name,
+      authority: ["hex:" + PUB],
+      quorum: 1,
+      refs: { trunk: { gates: ["hex:" + hx(GATE)], threshold: 1 } },
+      policy_init: { rules: [], recipes: [], approvals: 1, stale_reads: "warn" },
+      config_init: {},
+    }, null);
+    toast("repository " + name + " created → rep_" + short(oid) +
+      " — this browser key is now the authority root", true);
+    await syncPolicy();
+    loadAccess().catch(() => {});
+  });
+}
+function fmtExp(exp) {
+  const d = (+exp || 0) - Date.now();
+  if (d <= 0) return "expired";
+  const s = Math.floor(d / 1000), m = Math.floor(s / 60),
+        h = Math.floor(m / 60), dy = Math.floor(h / 24);
+  if (dy > 0) return `expires in ${dy}d ${h % 24}h`;
+  if (h > 0) return `expires in ${h}h ${m % 60}m`;
+  if (m > 0) return `expires in ${m}m ${s % 60}s`;
+  return `expires in ${s}s`;
+}
+
+/* ── POLICY ────────────────────────────────────────────────────── */
+async function loadPolicy() {
+  const p = await jget("/policy");
+  const el = $("policy");
+  el.className = "";
+  el.innerHTML = `
+    <div>repo <span class="oid">${p.repo ? esc(p.repo) : "— none (mint genesis in Access)"}</span></div>
+    <div style="margin-top:.4rem">gate key</div>
+    <div class="keyhex">${esc(p.gate)}</div>
+    <div style="margin-top:.4rem">authority key(s)</div>
+    ${(p.authority || []).map(a => `<div class="keyhex">${esc(a)}</div>`).join("")
+      || '<div class="empty">none</div>'}
+    <div style="margin-top:.6rem">active policy</div>
+    <pre class="file">${esc(JSON.stringify(p.policy, null, 2))}</pre>`;
+}
+
+/* ── header / shared state ─────────────────────────────────────── */
+async function syncPolicy() {
+  try {
+    const p = await jget("/policy");
+    REPO = p.repo || null;
+    if (p.gate) GATE = p.gate;
+    $("st-repo").textContent = REPO ? short(REPO) : "no repo";
+    $("st-gate").textContent = GATE ? short(GATE) : "–";
+  } catch (_) {}
+}
+
+/* ── boot ──────────────────────────────────────────────────────── */
+(async function boot() {
+  EDOK = await probeEd();
+  if (!EDOK) $("edbanner").style.display = "";
+  else await loadKey();
+  try { GATE = (await jget("/gatekey")).pub; } catch (_) {}
+  await syncPolicy();
+  await syncNames();
+  gateButtons();
+  show("overview");
+  setInterval(() => {
+    if (TAB === "overview")
+      loadOverview().catch(() => $("conn").classList.add("bad"));
+  }, 2000);
+  setInterval(() => {                              // live expiry countdowns
+    document.querySelectorAll("[data-exp]").forEach(el =>
+      el.textContent = fmtExp(+el.dataset.exp));
+  }, 1000);
+})();
 </script>
 </body>
 </html>

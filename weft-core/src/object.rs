@@ -36,6 +36,33 @@ fn sig_payload(repo: &V, typ: &str, ts: i64, author: &[u8], auth: &V, body: &V) 
     h(&buf)
 }
 
+/// The 32-byte digest an author signs (RFC §4) — exposed so remote signers
+/// (e.g. a browser holding the key) can sign without shipping the key.
+pub fn sig_payload_hash(repo: Option<Oid>, typ: &str, ts: i64, author: &[u8],
+                        auth: Option<Oid>, body: &V) -> Oid {
+    let repo_v = repo.map(|r| V::Bytes(r.to_vec())).unwrap_or(V::Null);
+    let auth_v = auth.map(|a| V::Bytes(a.to_vec())).unwrap_or(V::Null);
+    sig_payload(&repo_v, typ, ts, author, &auth_v, body)
+}
+
+/// Assemble a canonical envelope from parts + an externally produced
+/// signature. Verification happens at `Store::put`.
+pub fn assemble_obj(repo: Option<Oid>, typ: &str, ts: i64, author: &[u8],
+                    auth: Option<Oid>, body: V, sig: &[u8]) -> (Oid, Vec<u8>) {
+    let env = V::map(vec![
+        ("v", V::Int(1)),
+        ("repo", repo.map(|r| V::Bytes(r.to_vec())).unwrap_or(V::Null)),
+        ("type", V::Text(typ.into())),
+        ("ts", V::Int(ts)),
+        ("author", V::Bytes(author.to_vec())),
+        ("auth", auth.map(|a| V::Bytes(a.to_vec())).unwrap_or(V::Null)),
+        ("body", body),
+        ("sig", V::Bytes(sig.to_vec())),
+    ]);
+    let raw = encode(&env);
+    (h(&raw), raw)
+}
+
 pub fn make_obj(sk: &SigningKey, repo: Option<Oid>, typ: &str, body: V, auth: Option<Oid>,
                 ts: i64) -> (Oid, Vec<u8>) {
     let repo_v = repo.map(|r| V::Bytes(r.to_vec())).unwrap_or(V::Null);

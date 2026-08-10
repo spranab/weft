@@ -10,3 +10,4 @@ repository.workspace = true
 weft-core = { path = "../weft-core" }
 ed25519-dalek = "2"
 tiny_http = "0.12"
+serde_json = "1"

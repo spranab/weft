@@ -23,6 +23,8 @@ pub struct Hub {
     pub queue: Vec<Oid>,
     pub log: Vec<String>,    // pre-rendered JSON entries
     pub rejects: Vec<String>,
+    pub revoked: BTreeSet<Oid>,
+    pub pending: Vec<(Oid, String)>, // (manifest, JSON) awaiting approvals
     pub gate_sk: SigningKey,
     pub gate_pub: [u8; 32],
 }
@@ -87,6 +89,121 @@ fn provenance_json(hub: &Hub, oid: &Oid) -> Option<String> {
         footprint.join(","), chain.join(",")))
 }
 
+// ---------------------------------------------------- JSON ↔ V bridge -----
+// Byte strings cross the JSON boundary as "hex:<lowercase hex>" (browser
+// clients cannot speak CBOR natively; the server canonicalizes).
+
+fn jv_to_v(j: &serde_json::Value) -> Result<V, String> {
+    use serde_json::Value as J;
+    Ok(match j {
+        J::Null => V::Null,
+        J::Bool(b) => V::Bool(*b),
+        J::Number(n) => V::Int(n.as_i64().ok_or("non-integer number")?),
+        J::String(s) => match s.strip_prefix("hex:") {
+            Some(hexs) => V::Bytes((0..hexs.len()).step_by(2)
+                .map(|i| u8::from_str_radix(&hexs[i..i + 2], 16))
+                .collect::<Result<_, _>>().map_err(|_| "bad hex")?),
+            None => V::Text(s.clone()),
+        },
+        J::Array(a) => V::Arr(a.iter().map(jv_to_v).collect::<Result<_, _>>()?),
+        J::Object(o) => V::Map(o.iter()
+            .map(|(k, v)| Ok((V::Text(k.clone()), jv_to_v(v)?)))
+            .collect::<Result<_, String>>()?),
+    })
+}
+
+fn v_to_jv(v: &V) -> serde_json::Value {
+    use serde_json::Value as J;
+    match v {
+        V::Null => J::Null,
+        V::Bool(b) => J::Bool(*b),
+        V::Int(i) => J::Number((*i).into()),
+        V::Bytes(b) => J::String(format!("hex:{}", hex(b))),
+        V::Text(t) => J::String(t.clone()),
+        V::Arr(a) => J::Array(a.iter().map(v_to_jv).collect()),
+        V::Map(m) => J::Object(m.iter().filter_map(|(k, val)| {
+            k.text().map(|k| (k.to_string(), v_to_jv(val)))
+        }).collect()),
+    }
+}
+
+fn jfield_bytes(j: &serde_json::Value, key: &str) -> Option<Vec<u8>> {
+    match jv_to_v(j.get(key)?) {
+        Ok(V::Bytes(b)) => Some(b),
+        _ => None,
+    }
+}
+
+fn jfield_oid(j: &serde_json::Value, key: &str) -> Option<Oid> {
+    jfield_bytes(j, key)?.try_into().ok()
+}
+
+// ------------------------------------------------------- approvals --------
+
+/// May this key mint approvals? Authority members always; otherwise any
+/// unrevoked capability chain granting `approve` (roles are capability
+/// templates — RFC §11).
+fn approver_ok(hub: &Hub, author: &[u8], now_ms: i64) -> bool {
+    if hub.authority.iter().any(|k| k[..] == author[..]) {
+        return true;
+    }
+    hub.store.env.iter().any(|(cap_oid, env)| {
+        env.get("type").and_then(V::text) == Some("capability")
+            && env.get("body").and_then(|b| b.get("audience")).and_then(V::bytes)
+                == Some(author)
+            && cap_chain_valid_r(&hub.store, cap_oid, author, "approve",
+                                 &BTreeSet::new(), &hub.authority, now_ms,
+                                 &hub.revoked).is_ok()
+    })
+}
+
+/// Count valid approval evidence bound to this exact manifest (RFC §5.12:
+/// touch the state, re-earn the proof — approvals do not carry across).
+fn count_approvals(hub: &Hub, man: &Oid, now_ms: i64) -> Vec<Oid> {
+    hub.store.env.iter().filter_map(|(oid, env)| {
+        let b = env.get("body")?;
+        (env.get("type").and_then(V::text) == Some("evidence")
+            && b.get("recipe")?.get("kind").and_then(V::text) == Some("approval")
+            && b.get("manifest").and_then(V::bytes) == Some(&man[..])
+            && approver_ok(hub, env.get("author")?.bytes()?, now_ms))
+            .then_some(*oid)
+    }).collect()
+}
+
+/// Post-store side effects: genesis bootstrap and revocation tracking.
+fn apply_side_effects(hub: &mut Hub, oid: &Oid) -> Result<(), String> {
+    let env = hub.store.get(oid).clone();
+    match env.get("type").and_then(V::text) {
+        Some("genesis") => {
+            if !matches!(env.get("repo"), Some(V::Null)) {
+                return Err("genesis must have repo null".into());
+            }
+            let b = env.get("body").ok_or("no body")?;
+            let gates: Vec<Vec<u8>> = b.get("refs").and_then(|r| r.get("trunk"))
+                .and_then(|t| t.get("gates")).and_then(V::arr).unwrap_or(&[])
+                .iter().filter_map(|g| g.bytes().map(|x| x.to_vec())).collect();
+            if !gates.iter().any(|g| g[..] == hub.gate_pub[..]) {
+                return Err("this gate not in genesis".into());
+            }
+            hub.authority = b.get("authority").and_then(V::arr).unwrap_or(&[])
+                .iter().filter_map(|k| k.bytes().map(|x| x.to_vec())).collect();
+            hub.policy = b.get("policy_init").cloned();
+            hub.repo = Some(*oid);
+        }
+        Some("revocation") => {
+            if let Some(t) = env.get("body").and_then(|b| b.get("target")) {
+                if let Some(bytes) = t.bytes() {
+                    if let Ok(target) = Oid::try_from(bytes) {
+                        hub.revoked.insert(target);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn jesc(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     for c in s.chars() {
@@ -116,6 +233,8 @@ pub fn new_hub() -> Shared {
         queue: vec![],
         log: vec![],
         rejects: vec![],
+        revoked: BTreeSet::new(),
+        pending: vec![],
         gate_sk,
         gate_pub,
     }))
@@ -165,7 +284,9 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
     let ts = now_ms();
     let delta: Vec<Oid> = batch.iter().flat_map(|(_, d)| d.iter().copied()).collect();
     let sk = hub.gate_sk.clone();
-    let st = make_state(&sk, repo, hub.head_state, &delta, &mut hub.store, ts);
+    // ts=0 on state+manifest: same batch → same OIDs across gate re-attempts,
+    // so approval evidence stays bound to the manifest it was minted for
+    let st = make_state(&sk, repo, hub.head_state, &delta, &mut hub.store, 0);
     let target: Vec<Oid> = state_set(&hub.store, &st).into_iter().collect();
     let mat = match materialize(&hub.store, &target) {
         Ok(m) => m,
@@ -174,7 +295,7 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
             return;
         }
     };
-    let (man, man_raw) = make_obj(&sk, Some(repo), "manifest", mat.manifest.clone(), None, ts);
+    let (man, man_raw) = make_obj(&sk, Some(repo), "manifest", mat.manifest.clone(), None, 0);
     hub.store.put(man_raw).expect("manifest stores");
     let seq = hub.seq + 1;
     let policy = hub.policy.clone().expect("policy after genesis");
@@ -189,11 +310,35 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
         ("manifest", V::Bytes(man.to_vec())),
         ("proposals", V::Arr(batch.iter().map(|(p, _)| V::Bytes(p.to_vec())).collect())),
     ]);
-    let chk = check_landing(&hub.store, &body, &hub.authority, ts, &stale);
+    let chk = check_landing_r(&hub.store, &body, &hub.authority, ts, &stale,
+                              &hub.revoked);
     if !chk.errors.is_empty() {
         let msg = chk.errors.iter().map(|e| format!("\"{}\"", jesc(e)))
             .collect::<Vec<_>>().join(",");
         hub.rejects.push(format!("{{\"seq_attempt\":{seq},\"errors\":[{msg}]}}"));
+        return;
+    }
+    // approval gating (RFC §11): policy may demand human sign-off, minted as
+    // approval evidence bound to this exact manifest
+    let need = policy.get("approvals").and_then(V::int).unwrap_or(0);
+    let approvals = count_approvals(hub, &man, ts);
+    if (approvals.len() as i64) < need {
+        let changes_json: Vec<String> = delta.iter().map(|c| {
+            let b = hub.store.body(c);
+            format!("{{\"oid\":\"{}\",\"model\":\"{}\",\"message\":\"{}\"}}",
+                hex(c),
+                jesc(b.get("provenance").and_then(|p| p.get("model"))
+                    .and_then(V::text).unwrap_or("none")),
+                jesc(b.get("message").and_then(V::text).unwrap_or("")))
+        }).collect();
+        let entry = format!(
+            "{{\"manifest\":\"{}\",\"need\":{need},\"have\":{},\"changes\":[{}]}}",
+            hex(&man), approvals.len(), changes_json.join(","));
+        hub.pending.retain(|(m, _)| m != &man);
+        hub.pending.push((man, entry));
+        for (p, _) in &batch {
+            hub.queue.push(*p);      // stays queued until approvals arrive
+        }
         return;
     }
     // evidence execution: pinned recipes in a scratch dir (RFC §12.5 minimums
@@ -230,6 +375,7 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
             return;
         }
     }
+    ev_oids.extend(approvals);           // approvals count as evidence used
     let mut fields = vec![("evidence",
         V::Arr(ev_oids.iter().map(|e| V::Bytes(e.to_vec())).collect()))];
     if let V::Map(m) = &body {
@@ -255,6 +401,7 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
     hub.head = Some(lnd);
     hub.head_state = Some(st);
     hub.seq = seq;
+    hub.pending.retain(|(m, _)| m != &man);
     let changes_json: Vec<String> = delta.iter().map(|c| {
         let b = hub.store.body(c);
         let model = b.get("provenance").and_then(|p| p.get("model"))
@@ -356,28 +503,145 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
             (200, hub.store.raw[&oid].clone(), "application/cbor".into())
         }
         ("POST", "/obj") => match hub.store.put(body) {
-            Ok(oid) => {
-                let env = hub.store.get(&oid);
-                if env.get("type").and_then(V::text) == Some("genesis") {
-                    if !matches!(env.get("repo"), Some(V::Null)) {
-                        return (400, b"{\"error\":\"genesis must have repo null\"}".to_vec(), json);
-                    }
-                    let b = env.get("body").unwrap().clone();
-                    let gates: Vec<Vec<u8>> = b.get("refs").and_then(|r| r.get("trunk"))
-                        .and_then(|t| t.get("gates")).and_then(V::arr).unwrap_or(&[])
-                        .iter().filter_map(|g| g.bytes().map(|x| x.to_vec())).collect();
-                    if !gates.iter().any(|g| g[..] == hub.gate_pub[..]) {
-                        return (400, b"{\"error\":\"this gate not in genesis\"}".to_vec(), json);
-                    }
-                    hub.authority = b.get("authority").and_then(V::arr).unwrap_or(&[])
-                        .iter().filter_map(|k| k.bytes().map(|x| x.to_vec())).collect();
-                    hub.policy = b.get("policy_init").cloned();
-                    hub.repo = Some(oid);
-                }
-                (200, format!("{{\"oid\":\"{}\"}}", hex(&oid)).into_bytes(), json)
-            }
+            Ok(oid) => match apply_side_effects(&mut hub, &oid) {
+                Ok(()) => (200, format!("{{\"oid\":\"{}\"}}", hex(&oid)).into_bytes(), json),
+                Err(e) => (400, format!("{{\"error\":\"{}\"}}", jesc(&e)).into_bytes(), json),
+            },
             Err(e) => (400, format!("{{\"error\":\"{}\"}}", jesc(&e.to_string())).into_bytes(), json),
         },
+        ("POST", "/prepare") | ("POST", "/submit") => {
+            let submit = url == "/submit";
+            let Ok(j) = serde_json::from_slice::<serde_json::Value>(&body) else {
+                return (400, b"{\"error\":\"bad json\"}".to_vec(), json);
+            };
+            let repo = jfield_oid(&j, "repo");
+            let auth = jfield_oid(&j, "auth");
+            let Some(typ) = j.get("type").and_then(|t| t.as_str()) else {
+                return (400, b"{\"error\":\"missing type\"}".to_vec(), json);
+            };
+            let Some(ts) = j.get("ts").and_then(|t| t.as_i64()) else {
+                return (400, b"{\"error\":\"missing ts\"}".to_vec(), json);
+            };
+            let Some(author) = jfield_bytes(&j, "author") else {
+                return (400, b"{\"error\":\"missing author\"}".to_vec(), json);
+            };
+            let body_v = match j.get("body").map(jv_to_v) {
+                Some(Ok(v)) => v,
+                _ => return (400, b"{\"error\":\"bad body\"}".to_vec(), json),
+            };
+            if !submit {
+                let payload = sig_payload_hash(repo, typ, ts, &author, auth, &body_v);
+                return (200, format!("{{\"payload\":\"{}\"}}", hex(&payload)).into_bytes(), json);
+            }
+            let Some(sig) = jfield_bytes(&j, "sig") else {
+                return (400, b"{\"error\":\"missing sig\"}".to_vec(), json);
+            };
+            let (_, raw) = assemble_obj(repo, typ, ts, &author, auth, body_v, &sig);
+            match hub.store.put(raw) {
+                Ok(oid) => match apply_side_effects(&mut hub, &oid) {
+                    Ok(()) => {
+                        // proposals signed via the browser flow go straight
+                        // into the gate queue
+                        if hub.store.get(&oid).get("type").and_then(V::text)
+                            == Some("proposal") {
+                            hub.queue.push(oid);
+                        }
+                        (200, format!("{{\"oid\":\"{}\"}}", hex(&oid)).into_bytes(), json)
+                    }
+                    Err(e) => (400, format!("{{\"error\":\"{}\"}}", jesc(&e)).into_bytes(), json),
+                },
+                Err(e) => (400, format!("{{\"error\":\"{}\"}}", jesc(&e.to_string())).into_bytes(), json),
+            }
+        }
+        ("GET", "/intents") => {
+            let closed: BTreeSet<Oid> = hub.store.env.values()
+                .filter(|e| e.get("type").and_then(V::text) == Some("landing"))
+                .flat_map(|e| e.get("body").and_then(|b| b.get("delta")).and_then(V::arr)
+                    .unwrap_or(&[]).iter().map(as_oid).collect::<Vec<_>>())
+                .flat_map(|c| hub.store.body(&c).get("closes").and_then(V::arr)
+                    .unwrap_or(&[]).iter().map(as_oid).collect::<Vec<_>>())
+                .collect();
+            let items: Vec<String> = hub.store.env.iter().filter_map(|(oid, e)| {
+                if e.get("type").and_then(V::text) != Some("intent") {
+                    return None;
+                }
+                let b = e.get("body")?;
+                let criteria: Vec<String> = b.get("criteria").and_then(V::arr)
+                    .unwrap_or(&[]).iter().filter_map(|c| {
+                        c.get("desc").and_then(V::text)
+                            .map(|d| format!("\"{}\"", jesc(d)))
+                    }).collect();
+                Some(format!(
+                    "{{\"oid\":\"{}\",\"title\":\"{}\",\"goal\":\"{}\",\"ref\":\"{}\",\"criteria\":[{}],\"closed\":{},\"author\":\"{}\"}}",
+                    hex(oid),
+                    jesc(b.get("title").and_then(V::text).unwrap_or("")),
+                    jesc(b.get("goal").and_then(V::text).unwrap_or("")),
+                    jesc(b.get("ref").and_then(V::text).unwrap_or("trunk")),
+                    criteria.join(","), closed.contains(oid),
+                    hex(e.get("author")?.bytes()?)))
+            }).collect();
+            (200, format!("{{\"intents\":[{}]}}", items.join(",")).into_bytes(), json)
+        }
+        ("GET", "/caps") => {
+            let items: Vec<String> = hub.store.env.iter().filter_map(|(oid, e)| {
+                if e.get("type").and_then(V::text) != Some("capability") {
+                    return None;
+                }
+                let b = e.get("body")?;
+                let scope = b.get("scope")?;
+                let lst = |k: &str| scope.get(k).and_then(V::arr).unwrap_or(&[])
+                    .iter().filter_map(|x| x.text().map(|s| format!("\"{}\"", jesc(s))))
+                    .collect::<Vec<_>>().join(",");
+                let parent = match b.get("parent") {
+                    Some(V::Bytes(p)) => format!("\"{}\"", hex(p)),
+                    _ => "null".into(),
+                };
+                Some(format!(
+                    "{{\"oid\":\"{}\",\"issuer\":\"{}\",\"audience\":\"{}\",\"actions\":[{}],\"paths\":[{}],\"exp\":{},\"parent\":{},\"revoked\":{}}}",
+                    hex(oid), hex(e.get("author")?.bytes()?),
+                    hex(b.get("audience")?.bytes()?),
+                    lst("actions"), lst("paths"),
+                    b.get("exp").and_then(V::int).unwrap_or(0),
+                    parent, hub.revoked.contains(oid)))
+            }).collect();
+            (200, format!("{{\"caps\":[{}]}}", items.join(",")).into_bytes(), json)
+        }
+        ("GET", "/policy") => {
+            let repo = hub.repo.map(|r| format!("\"{}\"", hex(&r))).unwrap_or("null".into());
+            let authority: Vec<String> = hub.authority.iter()
+                .map(|k| format!("\"{}\"", hex(k))).collect();
+            let policy = hub.policy.as_ref().map(|p| v_to_jv(p).to_string())
+                .unwrap_or("null".into());
+            (200, format!(
+                "{{\"repo\":{repo},\"gate\":\"{}\",\"authority\":[{}],\"policy\":{policy}}}",
+                hex(&hub.gate_pub), authority.join(",")).into_bytes(), json)
+        }
+        ("GET", "/identities") => {
+            let mut latest: std::collections::BTreeMap<Vec<u8>, (i64, String, String)> =
+                std::collections::BTreeMap::new();
+            for env in hub.store.env.values() {
+                if env.get("type").and_then(V::text) != Some("identity") {
+                    continue;
+                }
+                let (Some(author), Some(b)) = (env.get("author").and_then(V::bytes),
+                                               env.get("body")) else { continue };
+                let ts = env.get("ts").and_then(V::int).unwrap_or(0);
+                let name = b.get("name").and_then(V::text).unwrap_or("").to_string();
+                let kind = b.get("kind").and_then(V::text).unwrap_or("").to_string();
+                let e = latest.entry(author.to_vec()).or_insert((i64::MIN, String::new(), String::new()));
+                if ts >= e.0 {
+                    *e = (ts, name, kind);
+                }
+            }
+            let items: Vec<String> = latest.iter().map(|(pubk, (_, name, kind))|
+                format!("{{\"pub\":\"{}\",\"name\":\"{}\",\"kind\":\"{}\"}}",
+                        hex(pubk), jesc(name), jesc(kind))).collect();
+            (200, format!("{{\"identities\":[{}]}}", items.join(",")).into_bytes(), json)
+        }
+        ("GET", "/pending") => {
+            let entries: Vec<&str> = hub.pending.iter().map(|(_, j)| j.as_str()).collect();
+            (200, format!("{{\"pending\":[{}]}}", entries.join(",")).into_bytes(), json)
+        }
         ("POST", "/propose") => match hub.store.put(body) {
             Ok(oid) => {
                 if hub.store.get(&oid).get("type").and_then(V::text) != Some("proposal") {

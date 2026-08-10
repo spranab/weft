@@ -17,6 +17,8 @@ pub mod object;
 
 pub use cbor::V;
 pub use engine::{materialize, patch_deps, patch_paths, Anchor, Mat};
-pub use gate::{cap_chain_valid, check_landing, closure_ok, closure_summary,
-               make_state, state_set, LandingCheck};
-pub use object::{as_oid, h, keygen, make_obj, verify_obj, Oid, Store, CTX};
+pub use gate::{cap_chain_valid, cap_chain_valid_r, check_landing,
+               check_landing_r, closure_ok, closure_summary, make_state,
+               state_set, LandingCheck};
+pub use object::{as_oid, assemble_obj, h, keygen, make_obj, sig_payload_hash,
+                 verify_obj, Oid, Store, CTX};

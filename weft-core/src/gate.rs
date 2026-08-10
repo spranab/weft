@@ -86,11 +86,25 @@ fn covered(path: &str, patterns: &[V]) -> bool {
 pub fn cap_chain_valid(store: &Store, cap: &Oid, actor: &[u8], action: &str,
                        paths: &BTreeSet<String>, authority: &[Vec<u8>],
                        now_ms: i64) -> Result<(), String> {
+    cap_chain_valid_r(store, cap, actor, action, paths, authority, now_ms,
+                      &BTreeSet::new())
+}
+
+/// Revocation-aware variant (RFC §5.4): a revoked link — or any link below
+/// one — fails validation at certification time.
+#[allow(clippy::too_many_arguments)]
+pub fn cap_chain_valid_r(store: &Store, cap: &Oid, actor: &[u8], action: &str,
+                         paths: &BTreeSet<String>, authority: &[Vec<u8>],
+                         now_ms: i64, revoked: &BTreeSet<Oid>) -> Result<(), String> {
+    let mut cur_oid = *cap;
     let mut link = store.get(cap);
     if link.get("body").unwrap().get("audience").unwrap().bytes() != Some(actor) {
         return Err("audience mismatch".into());
     }
     loop {
+        if revoked.contains(&cur_oid) {
+            return Err("capability revoked".into());
+        }
         let body = link.get("body").unwrap();
         if now_ms > body.get("exp").and_then(V::int).unwrap_or(0) {
             return Err("expired".into());
@@ -116,12 +130,14 @@ pub fn cap_chain_valid(store: &Store, cap: &Oid, actor: &[u8], action: &str,
                 };
             }
             Some(parent) => {
-                let parent = store.get(&as_oid(parent));
+                let parent_oid = as_oid(parent);
+                let parent = store.get(&parent_oid);
                 let expect = link.get("author").unwrap().bytes().unwrap();
                 if parent.get("body").unwrap().get("audience").unwrap().bytes()
                     != Some(expect) {
                     return Err("chain link broken".into());
                 }
+                cur_oid = parent_oid;
                 link = parent;
             }
         }
@@ -141,6 +157,12 @@ pub struct LandingCheck {
 /// staleness (finding W6).
 pub fn check_landing(store: &Store, body: &V, authority: &[Vec<u8>], now_ms: i64,
                      stale_reads: &str) -> LandingCheck {
+    check_landing_r(store, body, authority, now_ms, stale_reads, &BTreeSet::new())
+}
+
+/// Revocation-aware certification checklist (RFC §5.4 + §7.3).
+pub fn check_landing_r(store: &Store, body: &V, authority: &[Vec<u8>], now_ms: i64,
+                       stale_reads: &str, revoked: &BTreeSet<Oid>) -> LandingCheck {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
     let base: BTreeSet<Oid> = match body.get("base_state") {
@@ -193,9 +215,9 @@ pub fn check_landing(store: &Store, body: &V, authority: &[Vec<u8>], now_ms: i64
         match ch.get("auth") {
             Some(V::Null) | None => errors.push(format!("no auth on {}", hex8(c))),
             Some(a) => {
-                if let Err(why) = cap_chain_valid(
+                if let Err(why) = cap_chain_valid_r(
                     store, &as_oid(a), ch.get("author").unwrap().bytes().unwrap(),
-                    "publish_change", &touched, authority, now_ms) {
+                    "publish_change", &touched, authority, now_ms, revoked) {
                     errors.push(format!("auth invalid on {}: {why}", hex8(c)));
                 }
             }

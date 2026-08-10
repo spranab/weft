@@ -72,10 +72,19 @@ three kinds of adversary: two frontier models, and the compiler.
    daemon
 3. [`weftd/`](weftd/) — reference hub: object store, trunk gate with merge
    queue (batches footprint-disjoint proposals, serializes overlapping ones),
-   sandboxed evidence execution, certified landings, HTTP surface. Integration
-   test runs three concurrent workers over real HTTP through the gate with
-   light-client verification. 🚧 next: sync frames (§8), multi-gate quorums,
-   MCP server
+   sandboxed evidence execution, certified landings, **approval-gated
+   landings** (policy `approvals: n` parks batches until humans sign),
+   revocation-aware capability validation, and a full **governance console**
+   at `GET /` — browser-held Ed25519 identity (WebCrypto; the private key
+   never leaves the page), create-repository genesis flow, intent minting,
+   role console (Maintainer/Contributor/Reader as capability templates),
+   revoke buttons, approve-and-sign, provenance drill-down with key→name
+   resolution. All browser mutations flow through `/prepare` → sign →
+   `/submit`; the server canonicalizes and hashes, the browser only signs.
+   Two integration tests: a 3-worker HTTP swarm with light-client
+   verification, and the human-in-the-loop e2e (genesis → delegation →
+   pending approval → signed approval → landing; revoked capability →
+   rejection). 🚧 next: sync frames (§8), multi-gate quorums, MCP server
 4. `weft` — CLI porcelain for humans
 4. MCP server — the *primary* agent interface, first-class before any web UI
 5. Git bridge — two-way mirror so agchub repos keep a GitHub front door
