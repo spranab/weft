@@ -83,6 +83,23 @@
   .term .r { color: var(--bad); }
   .term .a { color: var(--accent); }
 
+  .plug { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    gap: 1.4rem; align-items: start; }
+  @media (max-width: 860px) { .plug { grid-template-columns: 1fr; } }
+  .plug-h { font-size: .72rem; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: .7rem; font-weight: 600; }
+  .plug-note { font-size: .82rem; color: var(--faint); margin-top: .7rem; }
+  .codeblock { position: relative; white-space: pre; padding-right: 4.5rem; }
+  .codeblock .copy { position: absolute; top: .6rem; right: .6rem;
+    background: var(--bg1); border: 1px solid var(--line); color: var(--dim);
+    font: 600 .68rem var(--sans); letter-spacing: .06em; text-transform: uppercase;
+    padding: .2rem .55rem; border-radius: 6px; cursor: pointer; }
+  .codeblock .copy:hover { color: var(--accent); border-color: var(--accent); }
+  .plug .card h3 { display: flex; align-items: center; gap: .5rem; }
+  .badge-live { border: 1px solid var(--ok); color: var(--ok); border-radius: 4px;
+    font: 600 .62rem var(--sans); letter-spacing: .08em; text-transform: uppercase;
+    padding: .08rem .4rem; }
+
   .uc-today { color: var(--faint); font-size: .85rem; margin-bottom: .5rem;
     padding-left: .7rem; border-left: 2px solid var(--line); }
   #uses .card p b { color: var(--accent); font-weight: 650; }
@@ -251,6 +268,16 @@
 </section>
 
 <script>
+function copyBlock(btn) {
+  const block = btn.parentElement.cloneNode(true);
+  block.querySelector(".copy")?.remove();
+  navigator.clipboard.writeText(block.textContent.trim()).then(() => {
+    const was = btn.textContent;
+    btn.textContent = "copied";
+    setTimeout(() => { btn.textContent = was; }, 1600);
+  });
+}
+
 (function () {
   const $ = id => document.getElementById(id);
   const CAPTIONS = [
@@ -397,33 +424,36 @@
   <p class="lead">Any host with an MCP client works with no integration code
   at all. Native plugins ship for two of them, for when you want the host's
   own lifecycle and config surface.</p>
-  <div class="grid2" style="align-items:start">
+  <div class="plug">
     <div>
-      <div class="cmd" style="margin-bottom:.6rem">// any MCP host — Hermes, OpenClaw, Claude Code, Codex
+      <h3 class="plug-h">Zero code — any MCP host</h3>
+      <div class="term codeblock"><button class="copy" onclick="copyBlock(this)">copy</button><span class="c">// Hermes · OpenClaw · Claude Code · Codex</span>
 { "mcpServers": { "weft": {
     "command": "weft-mcp",
-    "env": { "WEFT_HUB": "http://127.0.0.1:8747" } } } }<button class="btn ghost sm copy" onclick="copyCmd(this)">⧉</button></div>
-      <p style="font-size:.82rem;color:var(--faint)">Tools:
-      <span class="mono">repo_status · intent_lease · workspace ·
-      change_submit · approve · note_add · provenance</span></p>
+    "env": { "WEFT_HUB": "http://127.0.0.1:8747" } } } }</div>
+      <p class="plug-note">Tools: <span class="mono">repo_status ·
+      intent_lease · workspace · change_submit · approve · note_add ·
+      provenance</span></p>
     </div>
     <div>
+      <h3 class="plug-h">Native plugins</h3>
       <div class="card"><h3>Hermes Agent
-        <span class="chip ok" style="font-size:.62rem">verified live</span></h3>
-        <p>Native plugin with <span class="mono">plugin.yaml</span> and an
-        <span class="mono">on_session_end</span> hook that writes a session
-        note into the repo's own memory. Tested end to end against a running
-        gate — refusal → delegation → landed → provenance to the authority
-        root. <a href="https://github.com/spranab/weft/tree/main/integrations/hermes-weft">source ↗</a></p></div>
+        <span class="badge-live">verified live</span></h3>
+        <div class="term codeblock" style="font-size:.76rem;padding:.6rem 4.5rem .6rem .8rem;margin:.2rem 0 .6rem"><button class="copy" onclick="copyBlock(this)">copy</button>hermes plugins install spranab/weft-hermes-plugin</div>
+        <p>Adds an <span class="mono">on_session_end</span> hook that writes a
+        session note into the repo's own memory. Tested end to end against a
+        running gate — refusal → delegation → landed → provenance to the
+        authority root.
+        <a href="https://github.com/spranab/weft-hermes-plugin">repo ↗</a></p></div>
       <div class="card"><h3>OpenClaw</h3>
         <p>Native plugin on the OpenClaw plugin SDK —
         <span class="mono">definePluginEntry</span>, typed config, registered
         service and tools. Typechecks against the host SDK; the Hermes path is
-        the one exercised end to end so far.
+        the one exercised end to end so far. Publishing to npm + ClawHub next.
         <a href="https://github.com/spranab/weft/tree/main/integrations/openclaw-weft">source ↗</a></p></div>
-      <p style="font-size:.82rem;color:var(--faint)">Both keep the agent's
-      Ed25519 key on the agent's machine — the hub returns a digest to sign
-      and only ever receives signatures.
+      <p class="plug-note">Both keep the agent's Ed25519 key on the agent's
+      machine — the hub returns a digest to sign and only ever receives
+      signatures.
       <a href="https://github.com/spranab/weft/tree/main/integrations">all three paths ↗</a></p>
     </div>
   </div>

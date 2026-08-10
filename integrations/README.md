@@ -6,8 +6,8 @@ you want to write.
 | | Path | Works with | Code to write |
 |---|---|---|---|
 | 1 | **MCP** (recommended) | anything with an MCP client — Hermes, OpenClaw, Claude Code, Codex, code_puppy | none |
-| 2 | **[Native OpenClaw plugin](openclaw-weft/)** | OpenClaw | ships here |
-| 3 | **[Native Hermes plugin](hermes-weft/)** | Hermes Agent | ships here |
+| 2 | **[Native Hermes plugin](hermes-weft/)** | Hermes Agent | `hermes plugins install spranab/weft-hermes-plugin` |
+| 3 | **[Native OpenClaw plugin](openclaw-weft/)** | OpenClaw | npm + ClawHub (publishing next) |
 
 All three end in the same place: the agent proposes, the gate decides, and
 whatever lands carries signed provenance back to a human authority key. And
@@ -34,7 +34,34 @@ Tools: `repo_status`, `whoami`, `intent_create` / `intent_list` /
 `intent_lease`, `workspace`, `change_submit`, `approve`, `note_add`, `notes`,
 `provenance`.
 
-## 2 & 3. Native plugins — when you want more than tools
+## Installing the native plugins
+
+**Hermes** — published standalone (the host clones a repo whose `plugin.yaml`
+sits at the root):
+
+```bash
+source ~/.hermes/hermes-agent/venv/bin/activate
+hermes plugins install spranab/weft-hermes-plugin
+pip install requests cryptography      # into the same env Hermes runs from
+```
+
+Repo: [spranab/weft-hermes-plugin](https://github.com/spranab/weft-hermes-plugin)
+— the copy in `hermes-weft/` here is the development source.
+
+**OpenClaw** — OpenClaw code plugins install from npm, so publishing is:
+
+```bash
+cd integrations/openclaw-weft
+npm install && npm run build
+npm publish --access public            # @weftgate/openclaw-weft
+```
+
+then list it on ClawHub via the web form at `clawhub.ai/publish-plugin`
+(the ClawHub CLI publishes skills only, not code plugins). Until that lands,
+install from a local checkout with OpenClaw's local-plugin path, or use the
+MCP route above.
+
+## Native plugins — when you want more than tools
 
 Go native when you want framework-specific lifecycle behaviour: OpenClaw's
 service/logging surface and typed config schema, or Hermes hooks like
