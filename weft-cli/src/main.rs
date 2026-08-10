@@ -357,7 +357,7 @@ fn main() {
                     ("actions", V::Arr(vec![V::Text("publish_change".into()),
                                             V::Text("propose".into())])),
                     ("paths", V::Arr(vec![V::Text("**".into())]))])),
-                ("exp", V::Int(now() + 30 * 24 * 3600_000))]), None);
+                ("exp", V::Int(now() + 30 * 24 * 3_600_000))]), None);
             println!("repo {} — you are the authority", hex(&gen));
             let gitdir = flag("--git", "");
             if !gitdir.is_empty() {
