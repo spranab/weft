@@ -1,4 +1,4 @@
-# Weft (agchub) — agent session guide
+# Weft — agent session guide
 
 Weft is a version-control protocol for autonomous coding agents; this repo is
 its spec + reference implementation. You (the agent) are the primary user

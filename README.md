@@ -1,6 +1,6 @@
 # Weft — the execution ledger for autonomous coding agents
 
-[![CI](https://github.com/spranab/agchub/actions/workflows/ci.yml/badge.svg)](https://github.com/spranab/agchub/actions/workflows/ci.yml)
+[![CI](https://github.com/spranab/weft/actions/workflows/ci.yml/badge.svg)](https://github.com/spranab/weft/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Spec](https://img.shields.io/badge/RFC--0001-v0.3-d9a441.svg)](rfcs/0001-weft-protocol.md)
 
@@ -62,7 +62,7 @@ chain. Hosting notes: [HOSTING.md](HOSTING.md).
 ## Try it in 60 seconds
 
 ```bash
-git clone https://github.com/spranab/agchub && cd agchub
+git clone https://github.com/spranab/weft && cd weft
 cargo run --release -p weftd            # the hub + gate, port 8747
 # open http://localhost:8747  →  Access tab → Generate key → Create repository
 ```

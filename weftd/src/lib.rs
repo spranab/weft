@@ -708,7 +708,7 @@ pub fn seed_demo(shared: &Shared) {
         ("kind", V::Text("context".into())),
         ("text", V::Text("This is a READ-ONLY public demo. Everything you see \
             — landings, rejections, provenance chains — was produced by the \
-            real gate at boot. Run your own hub: github.com/spranab/agchub".into())),
+            real gate at boot. Run your own hub: github.com/spranab/weft".into())),
         ("anchors", V::Arr(vec![]))]), None);
 }
 
@@ -740,7 +740,7 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
     let json = "application/json".to_string();
     let mut hub = shared.lock().unwrap();
     if hub.readonly && method == "POST" {
-        return (403, b"{\"error\":\"read-only demo instance - clone https://github.com/spranab/agchub and run your own hub\"}".to_vec(), json);
+        return (403, b"{\"error\":\"read-only demo instance - clone https://github.com/spranab/weft and run your own hub\"}".to_vec(), json);
     }
     match (method, url) {
         ("GET", "/") => {

@@ -968,7 +968,7 @@ service" — this section is normative for conforming gate implementations.
 3. **`weftd`**: storage, sync, gate + queue, event streams; single binary.
 4. **MCP server + HTTP surface** (agents first-class before porcelain).
 5. **`agc` CLI**, then the git bridge (export mode first).
-6. **Dogfood**: develop agchub itself through agchub with a multi-agent
+6. **Dogfood**: develop Weft itself through Weft with a multi-agent
    swarm. Self-hosting is the credibility event — git's own history proves
    it.
 
