@@ -296,7 +296,7 @@ body: {
     { desc: "retry behavior property-tested", check: <recipe>? }
   ],
   deps:     [<intent-oid>, ...],
-  priority: 0.0-1.0,
+  priority: 0-100,     // integer — the CBOR subset has no floats (finding W8)
   supersedes: <intent-oid>?
 }
 ```

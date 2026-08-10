@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "weft": {
+      "command": "cargo",
+      "args": ["run", "--quiet", "--release", "-p", "weft-mcp"],
+      "env": {
+        "WEFT_HUB": "http://127.0.0.1:8747",
+        "WEFT_MODEL": "claude-fable-5"
+      }
+    }
+  }
+}

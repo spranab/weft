@@ -1,0 +1,15 @@
+[package]
+name = "weft-mcp"
+version = "0.1.0"
+description = "MCP server for the Weft protocol: agents lease intents, submit identity-mapped changes, and land evidence-gated work through a weftd gate."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+weft-core = { path = "../weft-core" }
+ed25519-dalek = "2"
+serde_json = "1"
+
+[dev-dependencies]
+weftd = { path = "../weftd" }

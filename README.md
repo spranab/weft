@@ -85,7 +85,15 @@ three kinds of adversary: two frontier models, and the compiler.
    verification, and the human-in-the-loop e2e (genesis → delegation →
    pending approval → signed approval → landing; revoked capability →
    rejection). 🚧 next: sync frames (§8), multi-gate quorums, MCP server
-4. `weft` — CLI porcelain for humans
+4. [`weft-mcp/`](weft-mcp/) — **the agent's door** (RFC §9): an MCP stdio
+   server holding an Ed25519 agent key. Agents lease intents, read numbered
+   workspaces, and `change_submit` does the position→identity translation —
+   agents never see line-IDs. The server discovers its own capabilities from
+   the hub; with none delegated it refuses helpfully with the key a human
+   should authorize in the console. `.mcp.json` wires it into any Claude Code
+   session in this repo. E2e-tested: initialize → refused → capability
+   minted → intent → change landed → intent closed → provenance to root.
+5. `weft` — CLI porcelain for humans
 4. MCP server — the *primary* agent interface, first-class before any web UI
 5. Git bridge — two-way mirror so agchub repos keep a GitHub front door
 

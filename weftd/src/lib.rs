@@ -616,6 +616,28 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
                 "{{\"repo\":{repo},\"gate\":\"{}\",\"authority\":[{}],\"policy\":{policy}}}",
                 hex(&hub.gate_pub), authority.join(",")).into_bytes(), json)
         }
+        ("GET", "/notes") => {
+            let items: Vec<String> = hub.store.env.iter().filter_map(|(oid, e)| {
+                if e.get("type").and_then(V::text) != Some("note") {
+                    return None;
+                }
+                let b = e.get("body")?;
+                let anchors: Vec<String> = b.get("anchors").and_then(V::arr)
+                    .unwrap_or(&[]).iter().filter_map(|a| {
+                        a.get("path").and_then(V::text)
+                            .map(|p| format!("\"{}\"", jesc(p)))
+                    }).collect();
+                Some(format!(
+                    "{{\"oid\":\"{}\",\"kind\":\"{}\",\"text\":\"{}\",\"paths\":[{}],\"author\":\"{}\",\"ts\":{}}}",
+                    hex(oid),
+                    jesc(b.get("kind").and_then(V::text).unwrap_or("context")),
+                    jesc(b.get("text").and_then(V::text).unwrap_or("")),
+                    anchors.join(","),
+                    hex(e.get("author")?.bytes()?),
+                    e.get("ts").and_then(V::int).unwrap_or(0)))
+            }).collect();
+            (200, format!("{{\"notes\":[{}]}}", items.join(",")).into_bytes(), json)
+        }
         ("GET", "/identities") => {
             let mut latest: std::collections::BTreeMap<Vec<u8>, (i64, String, String)> =
                 std::collections::BTreeMap::new();
