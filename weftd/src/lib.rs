@@ -28,6 +28,7 @@ pub struct Hub {
     pub cohort: std::collections::BTreeMap<Oid, u64>, // bisection groups after
     pub next_cohort: u64,                             // batch evidence failure
     pub readonly: bool,                               // public demo: no writes
+    pub sandbox: String,                              // evidence exec: none|unshare
     pub gate_sk: SigningKey,
     pub gate_pub: [u8; 32],
 }
@@ -244,9 +245,110 @@ pub fn new_hub() -> Shared {
         cohort: std::collections::BTreeMap::new(),
         next_cohort: 0,
         readonly: false,
+        sandbox: "none".into(),
         gate_sk,
         gate_pub,
     }))
+}
+
+fn chg_json(store: &Store, c: &Oid) -> String {
+    let b = store.body(c);
+    format!("{{\"oid\":\"{}\",\"model\":\"{}\",\"message\":\"{}\"}}",
+        hex(c),
+        jesc(b.get("provenance").and_then(|p| p.get("model"))
+            .and_then(V::text).unwrap_or("none")),
+        jesc(b.get("message").and_then(V::text).unwrap_or("")))
+}
+
+/// Is unprivileged user+network namespacing available for the sandbox?
+pub fn sandbox_available() -> bool {
+    std::process::Command::new("unshare").args(["-r", "-n", "--", "true"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status().map(|s| s.success()).unwrap_or(false)
+}
+
+/// Rebuild hub state from a replayed store: genesis/revocations, the highest
+/// contiguous landing chain, log summaries, and re-queue any proposal whose
+/// changes never landed — the pre-check re-adjudicates them on the next tick.
+fn rebuild_state(hub: &mut Hub) {
+    let oids: Vec<Oid> = hub.store.env.keys().copied().collect();
+    for oid in &oids {
+        match hub.store.env[oid].get("type").and_then(V::text) {
+            Some("genesis") | Some("revocation") => {
+                let _ = apply_side_effects(hub, oid);
+            }
+            _ => {}
+        }
+    }
+    let mut landings: Vec<(i64, Oid)> = hub.store.env.iter()
+        .filter(|(_, e)| e.get("type").and_then(V::text) == Some("landing"))
+        .map(|(o, e)| (
+            e.get("body").and_then(|b| b.get("seq")).and_then(V::int).unwrap_or(-1),
+            *o))
+        .collect();
+    landings.sort();
+    let mut landed: BTreeSet<Oid> = BTreeSet::new();
+    for (seq, l) in &landings {
+        let body = hub.store.body(l).clone();
+        let delta: Vec<Oid> = body.get("delta").and_then(V::arr).unwrap_or(&[])
+            .iter().map(as_oid).collect();
+        landed.extend(delta.iter().copied());
+        let changes: Vec<String> = delta.iter()
+            .map(|c| chg_json(&hub.store, c)).collect();
+        hub.log.push(format!(
+            "{{\"seq\":{seq},\"landing\":\"{}\",\"markers\":0,\"warnings\":[],\"changes\":[{}]}}",
+            hex(l), changes.join(",")));
+    }
+    if let Some(&(seq, head)) = landings.last() {
+        hub.seq = seq;
+        hub.head = Some(head);
+        hub.head_state = Some(as_oid(
+            hub.store.body(&head).get("target_state").expect("landing target")));
+    }
+    for oid in &oids {
+        let e = &hub.store.env[oid];
+        if e.get("type").and_then(V::text) != Some("proposal") {
+            continue;
+        }
+        let delta: Vec<Oid> = e.get("body").and_then(|b| b.get("delta"))
+            .and_then(V::arr).unwrap_or(&[]).iter().map(as_oid).collect();
+        if !delta.is_empty() && !delta.iter().all(|c| landed.contains(c)) {
+            hub.queue.push(*oid);
+        }
+    }
+}
+
+/// Open a persistent hub: WAL-backed store plus a stable gate key stored
+/// beside it (`<data>.key`) — a persistent hub must keep the key its
+/// genesis pinned. Returns (hub, objects replayed).
+pub fn new_hub_persistent(data: &std::path::Path) -> std::io::Result<(Shared, usize)> {
+    let (store, replayed) = Store::open(data)?;
+    let keypath = data.with_extension("key");
+    let gate_sk = match std::fs::read_to_string(&keypath) {
+        Ok(seed_hex) => {
+            let seed: Vec<u8> = (0..seed_hex.trim().len()).step_by(2)
+                .filter_map(|i| u8::from_str_radix(&seed_hex.trim()[i..i + 2], 16).ok())
+                .collect();
+            SigningKey::from_bytes(&<[u8; 32]>::try_from(seed.as_slice())
+                .map_err(|_| std::io::Error::other("bad gate key file"))?)
+        }
+        Err(_) => {
+            let (sk, _) = keygen();
+            std::fs::write(&keypath, hex(&sk.to_bytes()))?;
+            sk
+        }
+    };
+    let hub = new_hub();
+    {
+        let mut h = hub.lock().unwrap();
+        h.gate_pub = gate_sk.verifying_key().to_bytes();
+        h.gate_sk = gate_sk;
+        h.store = store;
+        rebuild_state(&mut h);
+    }
+    Ok((hub, replayed))
 }
 
 // ------------------------------------------------------------ gate ---------
@@ -415,7 +517,18 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
         }
         let cmd: Vec<String> = recipe.get("cmd").and_then(V::arr).unwrap_or(&[])
             .iter().filter_map(|x| x.text().map(String::from)).collect();
-        let status = std::process::Command::new(&cmd[0]).args(&cmd[1..])
+        // RFC §12.5: evidence recipes run in a sandbox. "unshare" gives a
+        // fresh user+network namespace (no network, no privilege) on Linux.
+        let mut command = if hub.sandbox == "unshare" {
+            let mut c = std::process::Command::new("unshare");
+            c.args(["-r", "-n", "--"]).args(&cmd);
+            c
+        } else {
+            let mut c = std::process::Command::new(&cmd[0]);
+            c.args(&cmd[1..]);
+            c
+        };
+        let status = command
             .current_dir(&dir).stdin(std::process::Stdio::null()).status();
         let pass = matches!(status, Ok(s) if s.success());
         let _ = std::fs::remove_dir_all(&dir);

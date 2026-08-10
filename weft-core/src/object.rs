@@ -104,18 +104,72 @@ pub fn verify_obj(raw: &[u8]) -> Result<V, CborError> {
     Ok(env)
 }
 
+/// Object store. In-memory by default; `open()` adds an append-only
+/// write-ahead log where each frame is `u32-le length ‖ canonical bytes`.
+/// Objects are immutable and self-verifying, so the WAL needs no index, no
+/// compaction for correctness, and replay re-verifies every signature — a
+/// corrupt or torn tail is truncated at the last good frame.
 #[derive(Default)]
 pub struct Store {
     pub raw: HashMap<Oid, Vec<u8>>,
     pub env: HashMap<Oid, V>,
+    wal: Option<std::fs::File>,
 }
 
 impl Store {
-    pub fn put(&mut self, raw: Vec<u8>) -> Result<Oid, CborError> {
+    /// Open (or create) a persistent store, replaying and re-verifying the
+    /// log. Returns the store and the number of objects replayed.
+    pub fn open(path: &std::path::Path) -> std::io::Result<(Store, usize)> {
+        use std::io::{Read, Seek};
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let mut f = std::fs::OpenOptions::new()
+            .create(true).read(true).write(true).truncate(false).open(path)?;
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf)?;
+        let mut store = Store::default();
+        let mut off = 0usize;
+        let mut replayed = 0usize;
+        while off + 4 <= buf.len() {
+            let len = u32::from_le_bytes(buf[off..off + 4].try_into().unwrap()) as usize;
+            if len == 0 || off + 4 + len > buf.len() {
+                break; // torn tail
+            }
+            if store.put_mem(buf[off + 4..off + 4 + len].to_vec()).is_err() {
+                break; // corrupt frame: everything after is untrusted
+            }
+            off += 4 + len;
+            replayed += 1;
+        }
+        f.set_len(off as u64)?;
+        f.seek(std::io::SeekFrom::End(0))?;
+        store.wal = Some(f);
+        Ok((store, replayed))
+    }
+
+    fn put_mem(&mut self, raw: Vec<u8>) -> Result<Oid, CborError> {
         let env = verify_obj(&raw)?;
         let oid = h(&raw);
         self.raw.insert(oid, raw);
         self.env.insert(oid, env);
+        Ok(oid)
+    }
+
+    pub fn put(&mut self, raw: Vec<u8>) -> Result<Oid, CborError> {
+        let oid = h(&raw);
+        if self.raw.contains_key(&oid) {
+            return Ok(oid); // idempotent: no duplicate WAL frames
+        }
+        let oid = self.put_mem(raw)?;
+        if let Some(f) = &mut self.wal {
+            use std::io::Write;
+            let raw = &self.raw[&oid];
+            f.write_all(&(raw.len() as u32).to_le_bytes())
+                .and_then(|_| f.write_all(raw))
+                .and_then(|_| f.sync_data())
+                .map_err(|e| CborError(format!("wal append: {e}")))?;
+        }
         Ok(oid)
     }
     pub fn get(&self, oid: &Oid) -> &V {

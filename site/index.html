@@ -613,13 +613,25 @@
   <details>
     <summary>Is it production-ready?</summary>
     <div>
-      <p>It's a working, tested, publicly-reviewed pre-1.0: thirteen e2e
+      <p>It's a working, tested, publicly-reviewed pre-1.0: fourteen e2e
       suites, a <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md">review
-      log of 91 dispositioned findings</a> from five kinds of adversary, and
-      a live demo. Not yet there: disk persistence (the store is in-memory),
-      evidence sandboxing for <em>writable</em> public hubs, and multi-node
-      sync. Self-hosted and private-network use is real today; the 1.0 arc is
-      the repo's roadmap.</p>
+      log of 91 dispositioned findings</a> from five kinds of adversary, a
+      live demo, and a <a href="https://github.com/spranab/weft-demo/tree/weft-export">real
+      woven git branch</a>.</p>
+      <p><strong>Durability and isolation are in.</strong> Run
+      <span class="mono">weftd --data ./hub.wal</span> and the hub is
+      crash-durable: an append-only log, every signature re-verified on
+      replay, a torn tail truncated at the last good frame, in-flight
+      proposals re-adjudicated after a restart. Evidence recipes execute
+      inside a fresh user + network namespace
+      (<span class="mono">--sandbox unshare</span>, auto-detected) — a test
+      that reaches for the network fails, which is the point; the daemon
+      warns loudly if it starts unconfined.</p>
+      <p><strong>Still honest about what's missing:</strong> multi-node
+      gossip sync (§8) — today a hub is a single node, and light clients
+      verify its certificates rather than replicating peer-to-peer — plus
+      multi-gate quorums and heterogeneous evidence quorums. Self-hosted use,
+      private networks, and CI-style deployments are real today.</p>
     </div>
   </details>
 </section>

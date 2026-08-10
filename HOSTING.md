@@ -41,19 +41,39 @@ with the same (or older) glibc as the host, `scp` it to `/opt/weft/weftd`,
 docker build -t weftd . && docker run -p 8747:8747 weftd
 ```
 
-## Why a WRITABLE public hub is not offered yet
+## Durable, sandboxed hubs
 
-Do not put a writable hub on the public internet until these land (all on
-the roadmap):
+```bash
+weftd 8747 --data /var/lib/weft/hub.wal --sandbox unshare
+```
 
-1. **Persistence** — the store is in-memory; a restart loses the repo.
-2. **Evidence sandboxing (RFC §12.5)** — recipes execute commands. On a
-   writable public hub that is remote-code-execution-as-a-service. The
-   demo policy has zero recipes and `--readonly` makes it moot.
-3. **One repo per hub**, no TLS termination (put nginx/Caddy in front),
-   no rate limiting beyond capability checks.
+**`--data <path>`** makes the hub crash-durable. The store is an append-only
+write-ahead log (`u32-le length ‖ canonical object bytes`); objects are
+immutable and self-verifying, so replay re-verifies **every signature**, a
+torn tail is truncated at the last good frame, and no index or compaction is
+needed for correctness. On boot the hub rebuilds genesis/authority,
+revocations, the landing chain, seq/head, and re-queues any proposal whose
+changes never landed — so work in flight during a crash is re-adjudicated,
+not lost. The gate keypair is stored beside the log (`hub.key`, mode it
+0600) because a persistent hub must keep the key its genesis pinned.
 
-A private writable hub on your own network/VPN (agents + trusted humans) is
-fine today: run `weftd 8747` without flags and put it behind your firewall
-or an authenticated reverse proxy. TLS: any reverse proxy
+**`--sandbox unshare|none|auto`** (default `auto`) controls evidence
+execution per RFC §12.5. `unshare` runs each recipe in a fresh user +
+network namespace — no network, no privilege, fresh scratch dir per run.
+`auto` probes for unprivileged user namespaces and falls back to `none`
+with a loud warning. **Never expose a writable hub publicly while the
+warning is printing.**
+
+## Why a WRITABLE public hub still needs care
+
+1. **Sandbox depth** — namespaces bound network and privilege, not CPU or
+   disk. For untrusted contributors, run the hub in a container/VM too and
+   set `MemoryMax`/`CPUQuota` on the unit.
+2. **TLS and rate limiting** — terminate TLS at nginx/Caddy; capability
+   checks stop unauthorized *writes*, not request floods.
+3. **One repo per hub**, and multi-node gossip sync is still roadmap.
+
+A private writable hub on your own network/VPN is straightforward today:
+`weftd 8747 --data ./hub.wal` behind your firewall or an authenticated
+reverse proxy. TLS via any proxy
 (`caddy reverse-proxy --from weft.example.com --to localhost:8747`).
