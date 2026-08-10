@@ -176,6 +176,172 @@
   </div>
 </section>
 
+<section id="how">
+  <h2>Watch one landing happen</h2>
+  <p class="lead">The whole protocol in one loop: intent → capabilities →
+  concurrent work → the gate → a certified landing → conventional git commits
+  out the other side.</p>
+  <div style="background:var(--bg1);border:1px solid var(--line);border-radius:12px;padding:1rem 1rem .6rem">
+  <svg id="anim" viewBox="0 0 1000 400" style="width:100%;height:auto;display:block"
+       font-family="ui-monospace, Consolas, monospace" aria-label="animated weft lifecycle">
+    <!-- warp -->
+    <line x1="30" y1="150" x2="640" y2="150" stroke="#232b36"/>
+    <line x1="30" y1="205" x2="640" y2="205" stroke="#232b36"/>
+    <line x1="30" y1="260" x2="640" y2="260" stroke="#232b36"/>
+    <!-- intent card -->
+    <g id="a-intent" opacity="0">
+      <rect x="34" y="60" width="216" height="46" rx="8" fill="#12161d" stroke="#e2a83d"/>
+      <text x="48" y="79" fill="#e2a83d" font-size="11">intent int_9f2a…</text>
+      <text x="48" y="96" fill="#93a0ae" font-size="11">“add retry logic to the client”</text>
+    </g>
+    <!-- authority + keys -->
+    <g id="a-auth" opacity="0">
+      <circle cx="70" cy="330" r="14" fill="none" stroke="#e2a83d" stroke-width="1.5"/>
+      <text x="63" y="335" fill="#e2a83d" font-size="12">⚿</text>
+      <text x="36" y="362" fill="#5e6b78" font-size="10">authority key</text>
+    </g>
+    <g id="a-k1" opacity="0"><text x="0" y="0" fill="#e2a83d" font-size="12">⚿</text></g>
+    <g id="a-k2" opacity="0"><text x="0" y="0" fill="#6ea6dc" font-size="12">⚿</text></g>
+    <g id="a-k3" opacity="0"><text x="0" y="0" fill="#52b381" font-size="12">⚿</text></g>
+    <!-- agent trails + dots -->
+    <line id="t1" x1="120" y1="150" x2="120" y2="150" stroke="#e2a83d" stroke-width="1.4" opacity=".5"/>
+    <line id="t2" x1="120" y1="205" x2="120" y2="205" stroke="#6ea6dc" stroke-width="1.4" opacity=".5"/>
+    <line id="t3" x1="120" y1="260" x2="120" y2="260" stroke="#52b381" stroke-width="1.4" opacity=".5"/>
+    <g id="d1" opacity="0"><circle r="7" fill="#e2a83d"/><text x="12" y="4" fill="#5e6b78" font-size="10">claude</text></g>
+    <g id="d2" opacity="0"><circle r="7" fill="#6ea6dc"/><text x="12" y="4" fill="#5e6b78" font-size="10">gpt</text></g>
+    <g id="d3" opacity="0"><circle r="7" fill="#52b381"/><text x="12" y="4" fill="#5e6b78" font-size="10">qwen</text></g>
+    <g id="d4" opacity="0"><circle r="7" fill="#d96c6c"/><text x="12" y="4" fill="#d96c6c" font-size="10">stale read</text></g>
+    <!-- gate -->
+    <rect id="a-gate" x="646" y="110" width="16" height="190" rx="8" fill="#e2a83d" opacity=".9"/>
+    <rect id="a-scan" x="640" y="110" width="28" height="190" rx="10" fill="#e2a83d" opacity="0"/>
+    <text x="600" y="330" fill="#e2a83d" font-size="12" letter-spacing="1">THE GATE</text>
+    <g id="a-checks" opacity="0">
+      <text x="680" y="132" fill="#52b381" font-size="11">✓ capability chain → authority</text>
+      <text x="680" y="152" fill="#52b381" font-size="11">✓ read-sets fresh</text>
+      <text x="680" y="172" fill="#52b381" font-size="11">✓ evidence passed on exact bytes</text>
+    </g>
+    <!-- trunk + landing -->
+    <line id="a-trunk" x1="662" y1="205" x2="662" y2="205" stroke="#e2a83d" stroke-width="2"/>
+    <g id="a-landing" opacity="0">
+      <rect x="-62" y="-15" width="124" height="30" rx="15" fill="#12161d" stroke="#e2a83d"/>
+      <text x="-50" y="5" fill="#e2a83d" font-size="11">landing seq 8 · 3✓</text>
+    </g>
+    <!-- github box + commits -->
+    <g id="a-gh" opacity="0">
+      <rect x="856" y="120" width="120" height="60" rx="10" fill="#12161d" stroke="#313c49"/>
+      <text x="884" y="146" fill="#93a0ae" font-size="12">GitHub</text>
+      <text x="872" y="166" fill="#5e6b78" font-size="10">weft-export branch</text>
+    </g>
+    <g id="c1" opacity="0"><rect x="-7" y="-7" width="14" height="14" rx="3" fill="none" stroke="#93a0ae"/></g>
+    <g id="c2" opacity="0"><rect x="-7" y="-7" width="14" height="14" rx="3" fill="none" stroke="#93a0ae"/></g>
+    <g id="c3" opacity="0"><rect x="-7" y="-7" width="14" height="14" rx="3" fill="none" stroke="#93a0ae"/></g>
+    <text id="a-trailer" x="770" y="230" fill="#5e6b78" font-size="10" opacity="0">Weft-Change · Weft-Model · Weft-Author-Key</text>
+  </svg>
+  <div style="display:flex;gap:.9rem;align-items:center;padding:.6rem .4rem 0">
+    <div id="anim-dots" style="display:flex;gap:.4rem"></div>
+    <div id="anim-cap" style="color:var(--dim);font-size:.9rem;min-height:1.5em"></div>
+  </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const CAPTIONS = [
+    "1 · A human — or an agent — posts an intent: a machine-readable task.",
+    "2 · The authority delegates scoped, expiring capabilities. Keys, not accounts.",
+    "3 · Agents work concurrently. Each change carries signed ops, read-set, provenance.",
+    "4 · The gate verifies: capability chains, read-set freshness, evidence on exact bytes. Stale reasoning bounces.",
+    "5 · Disjoint work commutes into ONE certified landing on the hash-chained trunk.",
+    "6 · weft export — GitHub receives conventional commits, provenance in trailers.",
+  ];
+  const dots = $("anim-dots");
+  CAPTIONS.forEach((_, i) => {
+    const d = document.createElement("span");
+    d.style.cssText = "width:8px;height:8px;border-radius:50%;background:var(--line);display:inline-block";
+    d.id = "adot" + i;
+    dots.appendChild(d);
+  });
+  const seg = (t, a, b) => t <= a ? 0 : t >= b ? 1 : (t - a) / (b - a);
+  const ease = u => u * u * (3 - 2 * u);
+  const lerp = (a, b, u) => a + (b - a) * u;
+  const move = (id, x, y) => $(id).setAttribute("transform", `translate(${x},${y})`);
+  const op = (id, v) => $(id).setAttribute("opacity", v);
+  const DUR = 13, GATE = 646;
+  let stage = -1;
+
+  function frame(t) {
+    // stage 1: intent (0–1.6)
+    op("a-intent", ease(seg(t, .2, 1)));
+    // stage 2: keys travel authority → lanes (1.6–3.2)
+    op("a-auth", ease(seg(t, 1.4, 2)));
+    [["a-k1", 150], ["a-k2", 205], ["a-k3", 260]].forEach(([k, y], i) => {
+      const u = ease(seg(t, 1.7 + i * .15, 2.8 + i * .15));
+      op(k, u > 0 && u < 1 ? 1 : u >= 1 ? seg(3.4, t, 3.6) ? 0 : 1 : 0);
+      move(k, lerp(80, 108, u), lerp(325, y + 4, u));
+    });
+    // stage 3: agents move along warp (3.2–6.2)
+    const lanes = [["d1", "t1", 150], ["d2", "t2", 205], ["d3", "t3", 260]];
+    lanes.forEach(([d, tr, y], i) => {
+      const u = ease(seg(t, 3.2 + i * .2, 6.0 + i * .1));
+      const x = lerp(120, GATE - 10, u);
+      op(d, seg(t, 3.0 + i * .2, 3.4 + i * .2));
+      move(d, x, y);
+      $(tr).setAttribute("x2", x);
+    });
+    // the late stale-read dot on lane 2's thread (5.4–7.6) → bounce (7.6–8.6)
+    const u4 = ease(seg(t, 5.4, 7.4));
+    const bounce = ease(seg(t, 7.6, 8.6));
+    op("d4", u4 > 0 ? (1 - seg(t, 8.4, 8.8)) : 0);
+    move("d4", lerp(120, GATE - 10, u4) - bounce * 90, 205 + bounce * 120);
+    // stage 4: gate scan + checks (6.2–8.2)
+    op("a-scan", Math.sin(Math.min(1, seg(t, 6.2, 8)) * Math.PI) * .35);
+    op("a-checks", ease(seg(t, 6.5, 7.2)) * (1 - seg(t, 9.6, 10.1)));
+    lanes.forEach(([d]) => op(d, +$(d).getAttribute("opacity") * (1 - seg(t, 8.4, 8.9))));
+    // stage 5: landing capsule + trunk (8.4–10.4)
+    const u5 = ease(seg(t, 8.6, 9.8));
+    $("a-trunk").setAttribute("x2", lerp(662, 980, ease(seg(t, 8.4, 9.4))));
+    op("a-landing", seg(t, 8.6, 9));
+    move("a-landing", lerp(662, 762, u5), 205);
+    // stage 6: export commits into github (10.2–12.4)
+    op("a-gh", ease(seg(t, 10, 10.6)));
+    [["c1", 0], ["c2", 1], ["c3", 2]].forEach(([c, i]) => {
+      const u = ease(seg(t, 10.4 + i * .35, 11.2 + i * .35));
+      op(c, u > 0 ? 1 : 0);
+      move(c, lerp(770, 880 + i * 26, u), lerp(205, 150, u));
+    });
+    op("a-trailer", ease(seg(t, 11.4, 12)) * (1 - seg(t, 12.6, 13)));
+    // captions
+    const s = t < 1.6 ? 0 : t < 3.2 ? 1 : t < 6.2 ? 2 : t < 8.5 ? 3 : t < 10.2 ? 4 : 5;
+    if (s !== stage) {
+      stage = s;
+      $("anim-cap").textContent = CAPTIONS[s];
+      CAPTIONS.forEach((_, i) => $("adot" + i).style.background =
+        i === s ? "var(--accent)" : "var(--line)");
+    }
+  }
+
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced) {
+    frame(9.2);
+    $("anim-cap").textContent = CAPTIONS.join("  ");
+    return;
+  }
+  let start = null, running = false, raf = null;
+  function loop(ts) {
+    if (!start) start = ts;
+    const t = ((ts - start) / 1000) % DUR;
+    frame(t);
+    if (running) raf = requestAnimationFrame(loop);
+  }
+  new IntersectionObserver(entries => {
+    const vis = entries[0].isIntersecting;
+    if (vis && !running) { running = true; raf = requestAnimationFrame(loop); }
+    if (!vis && running) { running = false; cancelAnimationFrame(raf); }
+  }).observe($("anim"));
+})();
+</script>
+
 <section>
   <h2>What lands, and what bounces</h2>
   <p class="lead">Fifty agents, one hundred tasks, one repository, no branches,
