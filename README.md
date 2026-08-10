@@ -63,9 +63,15 @@ three kinds of adversary: two frontier models, and the compiler.
 
 ## Planned components
 
-1. `rfcs/` — the protocol spec (the product, in a protocol project)
-2. `weftd` — reference node: single self-hostable binary (storage, sync, gate + merge queue)
-3. `weft` — CLI porcelain for humans
+1. `rfcs/` — the protocol spec (the product, in a protocol project) ✅
+2. [`weft-core/`](weft-core/) — the Rust engine: canonical CBOR, BLAKE3 +
+   Ed25519 signed objects, RGA materialization with manifests, capability
+   chains, the landing checklist. **9/9 tests green on Windows and Linux**,
+   including the determinism fuzzer (200 scenarios × 6 permutations) and
+   regression tests for every implementation finding. 🚧 next: sync + gate
+   daemon
+3. `weftd` — reference node: single self-hostable binary (storage, sync, gate + merge queue)
+4. `weft` — CLI porcelain for humans
 4. MCP server — the *primary* agent interface, first-class before any web UI
 5. Git bridge — two-way mirror so agchub repos keep a GitHub front door
 

@@ -1,0 +1,12 @@
+[package]
+name = "weft-core"
+version = "0.1.0"
+description = "Core engine of the Weft protocol (RFC-0001): canonical CBOR, signed content-addressed objects, RGA materialization with manifests, capability chains, certified landings."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+blake3 = "1"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"

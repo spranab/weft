@@ -448,7 +448,10 @@ body: {
   algorithm: "weft-rga-v1",
   tree_root:     <blake3>,   // Merkle root over (path, content-digest, attrs)
   file_map_root: <blake3>,   // Merkle root over (fid → path | tombstone)
-  conflict_root: <blake3>,   // Merkle root over canonical conflict records; zero-root if clean
+  conflict_root: <blake3>,   // root over conflict records, each canonically
+                             // encoded, SORTED BY THAT ENCODING (finding W7 —
+                             // unpinned sort order lets two conforming
+                             // implementations compute different roots)
   clean:     true|false
 }
 ```
