@@ -122,6 +122,7 @@
   <span class="spacer"></span>
   <a href="https://demo.weftgate.com">Live demo</a>
   <a href="#uses">Use cases</a>
+  <a href="#plug">Integrations</a>
   <a href="#faq">Why not…?</a>
   <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-weft-protocol.md">RFC-0001</a>
   <a href="https://github.com/spranab/weft">GitHub</a>
@@ -387,7 +388,44 @@
     <div class="card"><h3>MCP agent door</h3><p>Claude, GPT, Qwen, or your
       agent connects over the Model Context Protocol: lease intents, edit by
       line number, land through the gate. Refusals name the key a human
-      should authorize.</p></div>
+      should authorize — <a href="#plug">plug in your framework ↓</a>.</p></div>
+  </div>
+</section>
+
+<section id="plug">
+  <h2>Plug in your agent framework</h2>
+  <p class="lead">Any host with an MCP client works with no integration code
+  at all. Native plugins ship for two of them, for when you want the host's
+  own lifecycle and config surface.</p>
+  <div class="grid2" style="align-items:start">
+    <div>
+      <div class="cmd" style="margin-bottom:.6rem">// any MCP host — Hermes, OpenClaw, Claude Code, Codex
+{ "mcpServers": { "weft": {
+    "command": "weft-mcp",
+    "env": { "WEFT_HUB": "http://127.0.0.1:8747" } } } }<button class="btn ghost sm copy" onclick="copyCmd(this)">⧉</button></div>
+      <p style="font-size:.82rem;color:var(--faint)">Tools:
+      <span class="mono">repo_status · intent_lease · workspace ·
+      change_submit · approve · note_add · provenance</span></p>
+    </div>
+    <div>
+      <div class="card"><h3>Hermes Agent
+        <span class="chip ok" style="font-size:.62rem">verified live</span></h3>
+        <p>Native plugin with <span class="mono">plugin.yaml</span> and an
+        <span class="mono">on_session_end</span> hook that writes a session
+        note into the repo's own memory. Tested end to end against a running
+        gate — refusal → delegation → landed → provenance to the authority
+        root. <a href="https://github.com/spranab/weft/tree/main/integrations/hermes-weft">source ↗</a></p></div>
+      <div class="card"><h3>OpenClaw</h3>
+        <p>Native plugin on the OpenClaw plugin SDK —
+        <span class="mono">definePluginEntry</span>, typed config, registered
+        service and tools. Typechecks against the host SDK; the Hermes path is
+        the one exercised end to end so far.
+        <a href="https://github.com/spranab/weft/tree/main/integrations/openclaw-weft">source ↗</a></p></div>
+      <p style="font-size:.82rem;color:var(--faint)">Both keep the agent's
+      Ed25519 key on the agent's machine — the hub returns a digest to sign
+      and only ever receives signatures.
+      <a href="https://github.com/spranab/weft/tree/main/integrations">all three paths ↗</a></p>
+    </div>
   </div>
 </section>
 
