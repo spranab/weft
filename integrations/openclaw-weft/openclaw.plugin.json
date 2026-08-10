@@ -1,0 +1,45 @@
+{
+  "id": "weft",
+  "name": "Weft",
+  "version": "0.1.0",
+  "description": "Weft — the execution ledger for autonomous coding agents. Lease intents, edit a line-numbered workspace, and submit changes that land only when a verification gate's evidence and policy pass. Every landed line carries signed provenance to a human authority key. Talks to a weftd hub over HTTP; the agent's Ed25519 key never leaves the machine.",
+  "contracts": {
+    "tools": [
+      "weft_status",
+      "weft_intents",
+      "weft_workspace",
+      "weft_submit",
+      "weft_provenance"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "hub": {
+        "type": "string",
+        "description": "weftd hub base URL. Defaults to http://127.0.0.1:8747 (or WEFT_HUB)."
+      },
+      "keyPath": {
+        "type": "string",
+        "description": "Where this agent's Ed25519 seed lives. Created on first use; never transmitted. Defaults to ~/.openclaw/weft-agent.key (or WEFT_KEY)."
+      },
+      "model": {
+        "type": "string",
+        "description": "Model tag recorded in each change's provenance. Defaults to WEFT_MODEL, else 'openclaw'."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "description": "Per-request timeout against the hub. Default 15000."
+      },
+      "submitTimeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 600000,
+        "description": "How long to wait for the gate's verdict after proposing. Default 20000."
+      }
+    }
+  }
+}

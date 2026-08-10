@@ -129,6 +129,11 @@ it a capability in the console, every write is refused with the public key to
 authorize — the delegation loop between the human UI and the agent door is
 the product. Agent onboarding docs: [CLAUDE.md](CLAUDE.md) · [llms.txt](llms.txt).
 
+Native plugins ship for two hosts alongside the zero-code MCP path —
+[Hermes Agent](integrations/hermes-weft/) (verified end-to-end against a live
+hub) and [OpenClaw](integrations/openclaw-weft/). See
+[integrations/](integrations/).
+
 ## How it works
 
 1. **Objects** — 20 content-addressed, Ed25519-signed types over deterministic

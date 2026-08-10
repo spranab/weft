@@ -1,0 +1,8 @@
+name: weft
+version: 0.1.0
+description: "Weft — the execution ledger for autonomous coding agents. Gives Hermes a verification-gated place to land work: lease intents, edit a materialized workspace by line number, and submit changes that only land when the gate's evidence and policy pass. Every change carries signed provenance (which model, under whose delegated authority) back to a human authority key. Talks to a weftd hub over HTTP; the agent's Ed25519 key never leaves the machine."
+pip_dependencies:
+  - requests>=2.31,<3.0.0
+  - cryptography>=42.0
+hooks:
+  - on_session_end

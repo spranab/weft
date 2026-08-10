@@ -1,0 +1,30 @@
+{
+  "name": "@weftgate/openclaw-weft",
+  "version": "0.1.0",
+  "description": "Weft plugin for OpenClaw — land agent work through a verification gate.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "files": ["dist", "openclaw.plugin.json", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"],
+    "install": {
+      "kind": "npm",
+      "package": "@weftgate/openclaw-weft",
+      "minHostVersion": ">=2026.7.0"
+    },
+    "compat": {
+      "pluginApi": ">=2026.7.0"
+    }
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

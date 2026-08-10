@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .weft-agent.key
 .weft-cli.key
+
+# integration scratch
+integrations/openclaw-weft/node_modules/
+integrations/openclaw-weft/dist/
+integrations/hermes-weft/__pycache__/
