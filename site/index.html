@@ -549,6 +549,33 @@
   </details>
 
   <details>
+    <summary>Is this only for code?</summary>
+    <div>
+      <p>No — and that isn't aspiration, it's what the object model already
+      says. Nothing in Weft is code-shaped: intents, capabilities, read-sets,
+      evidence, and certified landings never mention a compiler. The content
+      model is <em>lines and blobs</em>, which is text — handbooks, specs,
+      prompt libraries, translations, configs, datasets — and evidence is
+      simply “a pinned recipe that passed.” A doc linter, a schema validator,
+      or a factuality check is as much evidence as a test suite. Git is the
+      import/export format, not the model.</p>
+      <p>The real frame: <strong>any artifact whose acceptance can be
+      argued for.</strong> Run
+      <span class="mono">cargo run --release -p weftd --example docs</span> —
+      three agents write a Markdown handbook concurrently, a doc-linter runs
+      as gate evidence, and a <em>judge</em> attests quality with its own key.
+      An unfinished section is refused even though the judge approved it,
+      because the gate is an AND.</p>
+      <p>That example also surfaces the right architecture for subjective
+      evaluation: gate-executed recipes have no network (they're sandboxed),
+      so an LLM judge is <em>not</em> a recipe — it's an independent attestor
+      publishing signed evidence from outside, exactly what
+      <span class="mono">distinct_roots</span> was designed for. Deterministic
+      checks run inside the gate; judgement signs from outside it.</p>
+    </div>
+  </details>
+
+  <details>
     <summary>Is this a blockchain?</summary>
     <div>
       <p>No. No token, no mining, no global consensus. Consensus is per-repo

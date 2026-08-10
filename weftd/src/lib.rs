@@ -185,7 +185,7 @@ fn count_approvals(hub: &Hub, man: &Oid, now_ms: i64) -> Vec<Oid> {
 /// Adopt a genesis object: repo id, authority set, initial policy.
 /// `require_gate` is true for hubs that intend to certify (they must be in
 /// the genesis gate set) and false for replicas, which only verify.
-pub(crate) fn adopt_genesis(hub: &mut Hub, oid: &Oid, require_gate: bool)
+pub fn adopt_genesis(hub: &mut Hub, oid: &Oid, require_gate: bool)
         -> Result<(), String> {
     let env = hub.store.get(oid).clone();
     if !matches!(env.get("repo"), Some(V::Null)) {
