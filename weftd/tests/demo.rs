@@ -39,10 +39,16 @@ fn demo_seeds_and_readonly_rejects() {
     assert!(log.contains("revoked"), "revocation rejection recorded: {log}");
     let heads = http("GET", "/heads", b"").1;
     assert!(!heads.contains("\"seq\":-1"), "landings exist: {heads}");
-    assert!(http("GET", "/intents", b"").1.contains("contributor docs")
-            || http("GET", "/intents", b"").1.contains("add contributor docs"));
+    let intents = http("GET", "/intents", b"").1;
+    assert!(intents.contains("exponential backoff"), "{intents}");
+    assert!(intents.contains("\"closed\":true"), "claude's intent closed: {intents}");
     assert!(http("GET", "/identities", b"").1.contains("pranab"));
-    assert!(http("GET", "/notes", b"").1.contains("READ-ONLY"));
+    let notes = http("GET", "/notes", b"").1;
+    assert!(notes.contains("READ-ONLY") && notes.contains("weft-demo"), "{notes}");
+    assert!(notes.contains("git-import"), "bridge note present: {notes}");
+    // the story's woven content is in the head workspace
+    let ws = http("GET", "/workspace", b"").1;
+    assert!(ws.contains("expo_backoff") && ws.contains("Choosing a backoff"), "{ws}");
     assert!(http("GET", "/", b"").1.contains("governance"));
 
     // readonly: every POST turned away

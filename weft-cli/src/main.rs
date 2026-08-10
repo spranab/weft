@@ -173,9 +173,14 @@ fn import_git(cli: &Cli, dir: &str, cap: Oid) {
             break;
         }
     }
+    let remote = Command::new("git").args(["-C", dir, "config", "--get",
+        "remote.origin.url"]).output().ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
     cli.publish("note", V::map(vec![
         ("kind", V::Text("context".into())),
-        ("text", V::Text(format!("git-import {sha}"))),
+        ("text", V::Text(format!("git-import {sha} {remote}").trim().to_string())),
         ("anchors", V::Arr(vec![]))]), None);
     println!("imported {} files from git HEAD {sha}", fids.len());
 }
@@ -186,7 +191,8 @@ fn export_git(cli: &Cli, dir: &str, branch: &str) {
     let notes = cli.get("/notes");
     let base_sha = notes["notes"].as_array().and_then(|ns| ns.iter()
         .filter_map(|n| n["text"].as_str())
-        .find_map(|t| t.strip_prefix("git-import ").map(String::from)));
+        .find_map(|t| t.strip_prefix("git-import ")
+            .and_then(|r| r.split_whitespace().next()).map(String::from)));
     let log = cli.get("/log");
     let landings = log["log"].as_array().cloned().unwrap_or_default();
     if landings.is_empty() {
@@ -343,7 +349,7 @@ fn main() {
                 ("policy_init", V::map(vec![
                     ("rules", V::Arr(vec![])), ("recipes", V::Arr(vec![])),
                     ("approvals", V::Int(0)),
-                    ("stale_reads", V::Text("warn".into()))])),
+                    ("stale_reads", V::Text("reject".into()))])),
                 ("config_init", V::map(vec![]))]), None, now());
             let (code, resp) = cli.http("POST", "/obj", &gen_raw);
             if code != 200 {

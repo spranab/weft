@@ -498,12 +498,23 @@ fn land(shared: &Shared, batch: Vec<(Oid, Vec<Oid>)>) {
 
 // ------------------------------------------------------------ demo ---------
 
-/// Populate a hub with a small in-process scenario so a public read-only
-/// instance boots with a living governance console: identities, intents,
-/// batched landings from three "models", a same-anchor race, one stale-read
-/// rejection, one revoked-credential rejection. No external processes, no
-/// persistence needed — state rebuilds on every boot.
+/// Populate a hub with the weft-demo bridge story so a public read-only
+/// instance boots telling the same tale as github.com/spranab/weft-demo:
+/// the retryx repo imported through the gate, three model-agents landing
+/// narrative work (claude: exponential backoff closing its intent; gpt:
+/// README docs; qwen: tests — batched), one stale-read rejection, one
+/// revoked-credential rejection. Line identities come from materialization
+/// snapshots, never hand-counted ordinals. State rebuilds on every boot.
 pub fn seed_demo(shared: &Shared) {
+    const SHA: &str = "bead04d148d0acbfccc8b4d3d354546a7af3d3c7";
+    const REPO_URL: &str = "https://github.com/spranab/weft-demo";
+    const FILES: [(&str, &str); 4] = [
+        ("README.md", "# retryx\n\nTiny retry helpers for flaky calls. No dependencies.\n\n```python\nfrom retryx import retry\n\nresult = retry(fetch, attempts=5)\n```\n"),
+        ("src/retryx/__init__.py", "from .backoff import constant_backoff\n\n\ndef retry(fn, attempts=3, backoff=constant_backoff):\n    last = None\n    for i in range(attempts):\n        try:\n            return fn()\n        except Exception as exc:  # noqa: BLE001 - deliberate catch-all\n            last = exc\n            backoff(i)\n    raise last\n"),
+        ("src/retryx/backoff.py", "import time\n\n\ndef constant_backoff(attempt, delay=0.5):\n    \"\"\"Sleep a fixed delay between attempts.\"\"\"\n    time.sleep(delay)\n"),
+        ("tests/test_retry.py", "from retryx import retry\n\n\ndef test_retry_succeeds_after_failures():\n    calls = {\"n\": 0}\n\n    def flaky():\n        calls[\"n\"] += 1\n        if calls[\"n\"] < 3:\n            raise ValueError(\"not yet\")\n        return \"ok\"\n\n    assert retry(flaky, attempts=5, backoff=lambda i: None) == \"ok\"\n    assert calls[\"n\"] == 3\n"),
+    ];
+
     let gate_pub = shared.lock().unwrap().gate_pub;
     let (auth_sk, auth_pub) = keygen();
     let ts = now_ms();
@@ -540,59 +551,71 @@ pub fn seed_demo(shared: &Shared) {
         ("exp", V::Int(ts + 3_650 * 24 * 3_600_000)),
         ("meta", V::map(vec![("reason", V::Text("Maintainer".into()))]))]), None);
 
-    // base: README + src module, landed via the real gate
-    let base_patch = put(&auth_sk, Some(gen), "patch", V::map(vec![
-        ("nonce", V::Bytes(b"demobase".to_vec())),
-        ("ops", V::Arr(vec![
-            V::Arr(vec![V::Text("mkfile".into()), V::Text("README.md".into())]),
-            V::Arr(vec![V::Text("mkfile".into()), V::Text("src/gate.rs".into())]),
-            V::Arr(vec![V::Text("insert".into()),
-                V::Arr(vec![V::Null, V::Int(0)]),
-                V::Arr(vec![V::Text("S".into())]),
-                V::Arr(vec![
-                    V::Bytes(b"# weft demo repository".to_vec()),
-                    V::Bytes(b"verification is the merge gate".to_vec())])]),
-            V::Arr(vec![V::Text("insert".into()),
-                V::Arr(vec![V::Null, V::Int(1)]),
-                V::Arr(vec![V::Text("S".into())]),
-                V::Arr(vec![
-                    V::Bytes(b"fn certify() { /* evidence, not eyeballs */ }".to_vec())])])]))]),
-        None);
-    let base_change = put(&auth_sk, Some(gen), "change", V::map(vec![
-        ("patch", V::Bytes(base_patch.to_vec())),
-        ("footprint", V::Arr(vec![V::Text("README.md".into()),
-                                  V::Text("src/gate.rs".into())])),
-        ("reads", V::Arr(vec![])),
-        ("message", V::Text("scaffold the demo repo".into()))]), Some(cap_auth));
-    let prop = put(&auth_sk, Some(gen), "proposal", V::map(vec![
-        ("ref", V::Text("trunk".into())),
-        ("delta", V::Arr(vec![V::Bytes(base_change.to_vec())])),
-        ("status", V::Text("open".into()))]), Some(cap_auth));
-    shared.lock().unwrap().queue.push(prop);
-    gate_tick(shared);
-    let base_digest = {
-        let hub = shared.lock().unwrap();
-        let st = hub.head_state.expect("base landed");
-        let target: Vec<Oid> = state_set(&hub.store, &st).into_iter().collect();
-        h(&materialize(&hub.store, &target).unwrap().tree["README.md"])
+    let propose = |sk: &SigningKey, change: Oid, auth: Oid| {
+        let oid = {
+            let (_, raw) = make_obj(sk, Some(gen), "proposal", V::map(vec![
+                ("ref", V::Text("trunk".into())),
+                ("delta", V::Arr(vec![V::Bytes(change.to_vec())])),
+                ("status", V::Text("open".into()))]), Some(auth), now_ms());
+            let mut hub = shared.lock().unwrap();
+            let oid = hub.store.put(raw).expect("proposal");
+            hub.queue.push(oid);
+            oid
+        };
+        let _ = oid;
     };
 
-    // intents + three model workers landing concurrent work
-    put(&auth_sk, Some(gen), "intent", V::map(vec![
-        ("ref", V::Text("trunk".into())),
-        ("title", V::Text("add contributor docs".into())),
-        ("goal", V::Text("explain capability delegation".into())),
-        ("constraints", V::Arr(vec![])),
-        ("criteria", V::Arr(vec![V::map(vec![
-            ("desc", V::Text("docs mention roles-as-templates".into()))])])),
-        ("priority", V::Int(70))]), None);
-    let models = ["claude-fable-5", "gpt-5.6-sol", "qwen3.8-max"];
-    let mut worker_caps = Vec::new();
-    for (i, model) in models.iter().enumerate() {
-        let (w_sk, w_pub) = keygen();
+    // ── base: the vendored git HEAD, landed through the gate ─────────────
+    let mut ops: Vec<V> = FILES.iter().map(|(path, _)| V::Arr(vec![
+        V::Text("mkfile".into()), V::Text((*path).into())])).collect();
+    for (i, (_, content)) in FILES.iter().enumerate() {
+        let lines: Vec<V> = content.lines()
+            .map(|l| V::Bytes(l.as_bytes().to_vec())).collect();
+        ops.push(V::Arr(vec![V::Text("insert".into()),
+            V::Arr(vec![V::Null, V::Int(i as i64)]),
+            V::Arr(vec![V::Text("S".into())]), V::Arr(lines)]));
+    }
+    let base_patch = put(&auth_sk, Some(gen), "patch", V::map(vec![
+        ("nonce", V::Bytes(b"demobase".to_vec())), ("ops", V::Arr(ops))]), None);
+    let base_change = put(&auth_sk, Some(gen), "change", V::map(vec![
+        ("patch", V::Bytes(base_patch.to_vec())),
+        ("footprint", V::Arr(FILES.iter().map(|(p, _)| V::Text((*p).into())).collect())),
+        ("reads", V::Arr(vec![])),
+        ("message", V::Text(format!("git-import {SHA}")))]), Some(cap_auth));
+    propose(&auth_sk, base_change, cap_auth);
+    gate_tick(shared);
+    put(&auth_sk, Some(gen), "note", V::map(vec![
+        ("kind", V::Text("context".into())),
+        ("text", V::Text(format!("git-import {SHA} {REPO_URL}"))),
+        ("anchors", V::Arr(vec![]))]), None);
+
+    // materialization snapshot: fid + line-id lookups without ordinal math
+    let snapshot = || {
+        let hub = shared.lock().unwrap();
+        let st = hub.head_state.expect("head after landing");
+        let target: Vec<Oid> = state_set(&hub.store, &st).into_iter().collect();
+        materialize(&hub.store, &target).expect("head materializes")
+    };
+    let fid_v = |m: &Mat, path: &str| -> V {
+        let (f, _) = m.file_map.iter()
+            .find(|(_, p)| p.as_deref() == Some(path)).expect(path);
+        V::Arr(vec![V::Bytes(f.0.to_vec()), V::Int(f.1)])
+    };
+    let lid_v = |m: &Mat, path: &str, idx: usize| -> V {
+        let l = m.line_index[path][idx];
+        V::Arr(vec![V::Bytes(l.0.to_vec()), V::Int(l.1)])
+    };
+    let last_v = |m: &Mat, path: &str| -> V {
+        lid_v(m, path, m.line_index[path].len() - 1)
+    };
+    let lines_v = |xs: &[&str]| V::Arr(xs.iter()
+        .map(|x| V::Bytes(x.as_bytes().to_vec())).collect());
+
+    let worker = |model: &str| -> (SigningKey, Oid) {
+        let (sk, pk) = keygen();
         let cap = put(&auth_sk, Some(gen), "capability", V::map(vec![
-            ("audience", V::Bytes(w_pub.to_vec())),
-            ("parent", V::Bytes(cap_auth.to_vec())),
+            ("audience", V::Bytes(pk.to_vec())),
+            ("parent", V::Null),
             ("scope", V::map(vec![
                 ("actions", V::Arr(vec![V::Text("publish_change".into()),
                                         V::Text("propose".into())])),
@@ -600,115 +623,129 @@ pub fn seed_demo(shared: &Shared) {
             ("exp", V::Int(ts + 3_650 * 24 * 3_600_000)),
             ("meta", V::map(vec![("reason",
                 V::Text(format!("Contributor ({model})")))]))]), None);
-        worker_caps.push((w_sk, cap, *model, i));
-    }
-    // wait: children of cap_auth must be authored by cap_auth's AUDIENCE
-    // (the authority key) — the demo delegates directly from the authority,
-    // so re-mint each worker capability correctly above via auth_sk. ✓
-    for (w_sk, cap, model, i) in &worker_caps {
-        let patch = put(w_sk, Some(gen), "patch", V::map(vec![
-            ("nonce", V::Bytes(format!("worker{i}_").into_bytes())),
-            ("ops", V::Arr(vec![
-                V::Arr(vec![V::Text("mkfile".into()),
-                            V::Text(format!("docs/{model}.md"))]),
-                V::Arr(vec![V::Text("insert".into()),
-                    V::Arr(vec![V::Null, V::Int(0)]),
-                    V::Arr(vec![V::Text("S".into())]),
-                    V::Arr(vec![V::Bytes(format!(
-                        "notes from {model}: roles are capability templates")
-                        .into_bytes())])])]))]), None);
-        let change = put(w_sk, Some(gen), "change", V::map(vec![
+        (sk, cap)
+    };
+    let change = |sk: &SigningKey, cap: Oid, model: &str, msg: &str,
+                  intent_oid: Option<Oid>, footprint: &[&str], reads: V,
+                  ops: Vec<V>| -> Oid {
+        let patch = put(sk, Some(gen), "patch", V::map(vec![
+            ("nonce", V::Bytes(now_ms().to_be_bytes().to_vec())),
+            ("ops", V::Arr(ops))]), None);
+        let mut body = vec![
             ("patch", V::Bytes(patch.to_vec())),
-            ("footprint", V::Arr(vec![V::Text(format!("docs/{model}.md"))])),
-            ("reads", V::Arr(vec![])),
-            ("message", V::Text(format!("contributor docs ({model})"))),
-            ("provenance", V::map(vec![("model", V::Text((*model).into()))]))]),
-            Some(*cap));
-        let prop = put(w_sk, Some(gen), "proposal", V::map(vec![
+            ("footprint", V::Arr(footprint.iter().map(|f| V::Text((*f).into())).collect())),
+            ("reads", reads),
+            ("message", V::Text(msg.into())),
+            ("provenance", V::map(vec![("model", V::Text(model.into()))]))];
+        if let Some(i) = intent_oid {
+            body.push(("intent", V::Bytes(i.to_vec())));
+            body.push(("closes", V::Arr(vec![V::Bytes(i.to_vec())])));
+        }
+        let c = put(sk, Some(gen), "change", V::map(body), Some(cap));
+        propose(sk, c, cap);
+        c
+    };
+    let intent = |title: &str, goal: &str| put(&auth_sk, Some(gen), "intent",
+        V::map(vec![
             ("ref", V::Text("trunk".into())),
-            ("delta", V::Arr(vec![V::Bytes(change.to_vec())])),
-            ("status", V::Text("open".into()))]), Some(*cap));
-        shared.lock().unwrap().queue.push(prop);
-    }
-    gate_tick(shared); // three disjoint changes batch into one landing
+            ("title", V::Text(title.into())),
+            ("goal", V::Text(goal.into())),
+            ("constraints", V::Arr(vec![])),
+            ("criteria", V::Arr(vec![])),
+            ("priority", V::Int(60))]), None);
 
-    // a stale-read rejection: reads an outdated README digest
-    let (w_sk, cap, model, _) = &worker_caps[0];
-    let readme_edit = put(&auth_sk, Some(gen), "patch", V::map(vec![
-        ("nonce", V::Bytes(b"readmev2".to_vec())),
-        ("ops", V::Arr(vec![V::Arr(vec![V::Text("insert".into()),
-            V::Arr(vec![V::Bytes(base_patch.to_vec()), V::Int(0)]),
-            V::Arr(vec![V::Text("S".into())]),
-            V::Arr(vec![V::Bytes(b"## updated by the authority".to_vec())])])]))]),
-        None);
-    let readme_change = put(&auth_sk, Some(gen), "change", V::map(vec![
-        ("patch", V::Bytes(readme_edit.to_vec())),
-        ("footprint", V::Arr(vec![V::Text("README.md".into())])),
-        ("reads", V::Arr(vec![])),
-        ("message", V::Text("update README".into()))]), Some(cap_auth));
-    let prop = put(&auth_sk, Some(gen), "proposal", V::map(vec![
-        ("ref", V::Text("trunk".into())),
-        ("delta", V::Arr(vec![V::Bytes(readme_change.to_vec())])),
-        ("status", V::Text("open".into()))]), Some(cap_auth));
-    shared.lock().unwrap().queue.push(prop);
+    let i1 = intent("add exponential backoff with jitter",
+                    "replace constant-only backoff; keep the public API");
+    let i2 = intent("document retry usage",
+                    "README should show attempts + backoff choices");
+    let i3 = intent("test backoff bounds",
+                    "exponential delays must respect the cap");
+
+    let backoff = "src/retryx/backoff.py";
+    let m0 = snapshot();
+    let old_digest = h(&m0.tree[backoff]);
+    let (claude_sk, claude_cap) = worker("claude-fable-5");
+    change(&claude_sk, claude_cap, "claude-fable-5",
+        "backoff: add exponential + jitter", Some(i1), &[backoff],
+        V::Arr(vec![]), vec![
+            V::Arr(vec![V::Text("delete".into()), fid_v(&m0, backoff),
+                        V::Arr(vec![lid_v(&m0, backoff, 4)])]),
+            V::Arr(vec![V::Text("insert".into()), fid_v(&m0, backoff),
+                        lid_v(&m0, backoff, 3),
+                        lines_v(&["    \"\"\"Sleep a fixed delay between attempts (see expo_backoff).\"\"\""])]),
+            V::Arr(vec![V::Text("insert".into()), fid_v(&m0, backoff),
+                        last_v(&m0, backoff), lines_v(&[
+                "", "",
+                "def expo_backoff(attempt, base=0.25, cap=8.0):",
+                "    \"\"\"Exponential backoff with full jitter, capped.\"\"\"",
+                "    import random",
+                "    delay = min(cap, base * (2 ** attempt))",
+                "    time.sleep(random.uniform(0, delay))"])])]);
     gate_tick(shared);
-    let stale_patch = put(w_sk, Some(gen), "patch", V::map(vec![
-        ("nonce", V::Bytes(b"stalewrk".to_vec())),
-        ("ops", V::Arr(vec![
-            V::Arr(vec![V::Text("mkfile".into()), V::Text("docs/stale.md".into())]),
-            V::Arr(vec![V::Text("insert".into()),
-                V::Arr(vec![V::Null, V::Int(0)]),
-                V::Arr(vec![V::Text("S".into())]),
-                V::Arr(vec![V::Bytes(b"reasoned against the old README".to_vec())])])]))]),
-        None);
-    let stale_change = put(w_sk, Some(gen), "change", V::map(vec![
-        ("patch", V::Bytes(stale_patch.to_vec())),
-        ("footprint", V::Arr(vec![V::Text("docs/stale.md".into())])),
-        ("reads", V::Arr(vec![V::Arr(vec![
-            V::Text("README.md".into()), V::Bytes(base_digest.to_vec())])])),
-        ("message", V::Text(format!("stale reasoning ({model})"))),
-        ("provenance", V::map(vec![("model", V::Text((*model).into()))]))]),
-        Some(*cap));
-    let prop = put(w_sk, Some(gen), "proposal", V::map(vec![
-        ("ref", V::Text("trunk".into())),
-        ("delta", V::Arr(vec![V::Bytes(stale_change.to_vec())])),
-        ("status", V::Text("open".into()))]), Some(*cap));
-    shared.lock().unwrap().queue.push(prop);
+
+    // gpt + qwen: disjoint, one tick — the gate batches them
+    let m1 = snapshot();
+    let (gpt_sk, gpt_cap) = worker("gpt-5.6-sol");
+    let (qwen_sk, qwen_cap) = worker("qwen3.8-max");
+    change(&gpt_sk, gpt_cap, "gpt-5.6-sol",
+        "README: document attempts + backoff", Some(i2), &["README.md"],
+        V::Arr(vec![]), vec![
+            V::Arr(vec![V::Text("insert".into()), fid_v(&m1, "README.md"),
+                        last_v(&m1, "README.md"), lines_v(&[
+                "", "## Choosing a backoff", "",
+                "```python",
+                "from retryx.backoff import expo_backoff",
+                "retry(fetch, attempts=5, backoff=expo_backoff)",
+                "```"])])]);
+    change(&qwen_sk, qwen_cap, "qwen3.8-max",
+        "tests: expo_backoff respects the cap", Some(i3),
+        &["tests/test_retry.py"], V::Arr(vec![]), vec![
+            V::Arr(vec![V::Text("insert".into()), fid_v(&m1, "tests/test_retry.py"),
+                        last_v(&m1, "tests/test_retry.py"), lines_v(&[
+                "", "",
+                "def test_expo_backoff_is_capped(monkeypatch):",
+                "    from retryx import backoff as b",
+                "    slept = []",
+                "    monkeypatch.setattr(b.time, 'sleep', slept.append)",
+                "    b.expo_backoff(attempt=30, base=0.25, cap=8.0)",
+                "    assert 0 <= slept[0] <= 8.0"])])]);
+    gate_tick(shared);
+
+    // a stale-read rejection: reasoned against the pre-claude backoff.py
+    let m2 = snapshot();
+    let (stale_sk, stale_cap) = worker("claude-fable-5");
+    change(&stale_sk, stale_cap, "claude-fable-5",
+        "expose expo_backoff as default (stale reasoning)", None,
+        &["src/retryx/__init__.py"],
+        V::Arr(vec![V::Arr(vec![V::Text(backoff.into()),
+                                V::Bytes(old_digest.to_vec())])]),
+        vec![V::Arr(vec![V::Text("insert".into()),
+                         fid_v(&m2, "src/retryx/__init__.py"),
+                         last_v(&m2, "src/retryx/__init__.py"),
+                         lines_v(&["# assumes constant_backoff is the only strategy"])])]);
     gate_tick(shared); // rejected: stale read
 
     // a revoked-credential rejection
-    let (w_sk, cap, model, _) = &worker_caps[1];
+    let (late_sk, late_cap) = worker("gpt-5.6-sol");
     put(&auth_sk, Some(gen), "revocation", V::map(vec![
-        ("target", V::Bytes(cap.to_vec())),
+        ("target", V::Bytes(late_cap.to_vec())),
         ("reason", V::Text("credential rotation drill".into()))]), None);
-    let hack_patch = put(w_sk, Some(gen), "patch", V::map(vec![
-        ("nonce", V::Bytes(b"revokedw".to_vec())),
-        ("ops", V::Arr(vec![
-            V::Arr(vec![V::Text("mkfile".into()), V::Text("docs/late.md".into())]),
-            V::Arr(vec![V::Text("insert".into()),
-                V::Arr(vec![V::Null, V::Int(0)]),
-                V::Arr(vec![V::Text("S".into())]),
-                V::Arr(vec![V::Bytes(b"submitted after revocation".to_vec())])])]))]),
-        None);
-    let hack_change = put(w_sk, Some(gen), "change", V::map(vec![
-        ("patch", V::Bytes(hack_patch.to_vec())),
-        ("footprint", V::Arr(vec![V::Text("docs/late.md".into())])),
-        ("reads", V::Arr(vec![])),
-        ("message", V::Text(format!("post-revocation attempt ({model})"))),
-        ("provenance", V::map(vec![("model", V::Text((*model).into()))]))]),
-        Some(*cap));
-    let prop = put(w_sk, Some(gen), "proposal", V::map(vec![
-        ("ref", V::Text("trunk".into())),
-        ("delta", V::Arr(vec![V::Bytes(hack_change.to_vec())])),
-        ("status", V::Text("open".into()))]), Some(*cap));
-    shared.lock().unwrap().queue.push(prop);
+    let m3 = snapshot();
+    change(&late_sk, late_cap, "gpt-5.6-sol",
+        "post-revocation attempt", None, &["README.md"], V::Arr(vec![]),
+        vec![V::Arr(vec![V::Text("insert".into()), fid_v(&m3, "README.md"),
+                         last_v(&m3, "README.md"),
+                         lines_v(&["(this line should never land)"])])]);
     gate_tick(shared); // rejected: capability revoked
 
     put(&auth_sk, Some(gen), "note", V::map(vec![
         ("kind", V::Text("context".into())),
-        ("text", V::Text("This is a READ-ONLY public demo. Everything you see \
-            — landings, rejections, provenance chains — was produced by the \
-            real gate at boot. Run your own hub: github.com/spranab/weft".into())),
+        ("text", V::Text(format!(
+            "This is a READ-ONLY public demo retelling {REPO_URL} — the \
+             weft-export branch there was woven by these landings and \
+             exported as conventional git commits. Everything you see was \
+             produced by the real gate at boot. Run your own hub: \
+             github.com/spranab/weft"))),
         ("anchors", V::Arr(vec![]))]), None);
 }
 

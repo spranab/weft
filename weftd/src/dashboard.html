@@ -863,14 +863,16 @@ async function loadBridge() {
     n + e.changes.filter(c => !String(c.message).startsWith("git-import")).length, 0);
   $("bridge-exportable").textContent = landedAfter;
   if (base) {
-    const sha = base.split(" ")[1] || "";
+    const parts = base.split(" ");
+    const sha = parts[1] || "", url = parts[2] || "";
     $("bridge-state").textContent = "bridged";
     $("bridge-state").className = "chip ok";
     $("bridge-info").innerHTML = `
       <div class="kv">
-        <dt>base git commit</dt><dd>${esc(sha)}</dd>
+        ${url ? `<dt>upstream</dt><dd><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></dd>` : ""}
+        <dt>base git commit</dt><dd>${url ? `<a href="${esc(url)}/commit/${esc(sha)}" target="_blank" rel="noopener">${esc(sha)}</a>` : esc(sha)}</dd>
         <dt>landed since import</dt><dd>${landedAfter} change(s) ready to export</dd>
-        <dt>export branch</dt><dd>weft-export (rebuilt deterministically each run)</dd>
+        <dt>export branch</dt><dd>${url ? `<a href="${esc(url)}/tree/weft-export" target="_blank" rel="noopener">weft-export — see the real woven commits ↗</a>` : "weft-export (rebuilt deterministically each run)"}</dd>
       </div>`;
   } else {
     $("bridge-state").textContent = REPO ? "native repo (no git upstream)" : "no repository";
