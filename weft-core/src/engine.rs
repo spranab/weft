@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub type LineId = (Oid, i64);
 pub type Fid = (Oid, i64);
+/// Per-anchor child inserts: (patch-oid, ordinal, line bytes).
+type Children = BTreeMap<Anchor, Vec<(Oid, i64, Vec<u8>)>>;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Anchor {
@@ -93,8 +95,7 @@ pub fn materialize(store: &Store, changes: &[Oid]) -> Result<Mat, String> {
     }
 
     let mut files: BTreeMap<Fid, FileMeta> = BTreeMap::new();
-    let mut children: BTreeMap<Fid, BTreeMap<Anchor, Vec<(Oid, i64, Vec<u8>)>>> =
-        BTreeMap::new();
+    let mut children: BTreeMap<Fid, Children> = BTreeMap::new();
     let mut tombs: BTreeMap<Fid, BTreeMap<LineId, BTreeSet<Oid>>> = BTreeMap::new();
 
     for (poid, body) in &patches {
@@ -237,12 +238,12 @@ pub fn materialize(store: &Store, changes: &[Oid]) -> Result<Mat, String> {
 
     // manifest roots — records sorted by canonical encoding (normative)
     let sort_enc = |mut v: Vec<V>| {
-        v.sort_by_key(|x| encode(x));
+        v.sort_by_key(encode);
         V::Arr(v)
     };
-    conflicts.sort_by_key(|x| encode(x));
+    conflicts.sort_by_key(encode);
     conflicts.dedup();
-    markers.sort_by_key(|x| encode(x));
+    markers.sort_by_key(encode);
     let tree_root = h(&encode(&sort_enc(tree.iter().map(|(p, c)| {
         V::Arr(vec![V::Text(p.clone()), V::Bytes(h(c).to_vec())])
     }).collect())));

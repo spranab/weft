@@ -1,0 +1,12 @@
+[package]
+name = "weftd"
+version = "0.1.0"
+description = "Weft reference hub: object store, trunk gate with merge queue, sandboxed evidence execution, certified landings (RFC-0001 §7), HTTP surface."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+weft-core = { path = "../weft-core" }
+ed25519-dalek = "2"
+tiny_http = "0.12"

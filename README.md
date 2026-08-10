@@ -70,7 +70,12 @@ three kinds of adversary: two frontier models, and the compiler.
    including the determinism fuzzer (200 scenarios × 6 permutations) and
    regression tests for every implementation finding. 🚧 next: sync + gate
    daemon
-3. `weftd` — reference node: single self-hostable binary (storage, sync, gate + merge queue)
+3. [`weftd/`](weftd/) — reference hub: object store, trunk gate with merge
+   queue (batches footprint-disjoint proposals, serializes overlapping ones),
+   sandboxed evidence execution, certified landings, HTTP surface. Integration
+   test runs three concurrent workers over real HTTP through the gate with
+   light-client verification. 🚧 next: sync frames (§8), multi-gate quorums,
+   MCP server
 4. `weft` — CLI porcelain for humans
 4. MCP server — the *primary* agent interface, first-class before any web UI
 5. Git bridge — two-way mirror so agchub repos keep a GitHub front door
