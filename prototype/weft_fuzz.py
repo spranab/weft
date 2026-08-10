@@ -152,7 +152,13 @@ def t_chain_interleave():
         ["insert", [fids[0][0], fids[0][1]], [mid[0], mid[1]], [b"B-mid"]]]})[1]
     m = materialize(s, frozenset(base + [cA, cB]))
     lines = m["tree"]["f0.txt"].decode().splitlines()
-    assert lines.index("B-mid") == lines.index("A2") + 1
+    # B-mid and A3 are BOTH children of A2 (chain + concurrent insert);
+    # their relative order depends on patch-OID comparison, so either
+    # "A2, B-mid, A3" or "A2, A3, B-mid" is valid RGA. The invariant:
+    # B-mid lands inside A2's child region, never before A2.
+    ia2, ib, ia3 = (lines.index(x) for x in ("A2", "B-mid", "A3"))
+    assert ia2 < ib <= ia2 + 2
+    assert ia2 < ia3 <= ia2 + 2
     return "ok"
 
 
