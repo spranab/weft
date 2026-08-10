@@ -89,6 +89,29 @@ three kinds of adversary: two frontier models, and the compiler.
 4. MCP server — the *primary* agent interface, first-class before any web UI
 5. Git bridge — two-way mirror so agchub repos keep a GitHub front door
 
+## Benchmarks
+
+`cargo run --release -p weftd --example bench` — four numbers that decide
+whether the protocol survives its design-center workload. On a 32-core
+Windows dev machine (in-memory store, evidence execution excluded):
+
+| Bench | Result | What it measures |
+|---|---|---|
+| B1 object ingest | **~27,000 obj/s** | canonical decode + Ed25519 verify + store (crypto-bound) |
+| B2 materialize 5,000 concurrent changes | **10.4 ms** (~480k changes/s) | the RGA engine hot path |
+| B3 gate, disjoint work | **~55,000 chg/s** — 500 proposals → **1 landing** | §7.5 batching: disjoint work amortizes to one certification |
+| B4 gate, contended file | **~975 chg/s** — 300 appends → 301 landings | worst case: every landing is a full certify cycle (~1 ms each) |
+
+Reading them honestly: the engine is not the bottleneck and never will be —
+real-world throughput is dominated by **evidence execution** (your test
+suite's runtime), which is exactly what B3's batching amortizes. B4 says a
+fully-serialized, cryptographically-certified landing costs ~1 ms of
+protocol overhead; git's equivalent (commit + merge + push, no
+verification) is the same order of magnitude. What is *not* yet measured:
+HTTP/sync overhead at swarm scale, disk-backed storage, and
+10⁶-change repos (the delta-form state and v0.2 Merkle roadmap exist for
+that).
+
 ## License
 
 MIT (see [LICENSE](LICENSE)). Dual MIT/Apache-2.0 will be considered before
