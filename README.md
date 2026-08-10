@@ -52,7 +52,8 @@ Agents break every one of those assumptions.
 
 ## Live demo
 
-**http://15.204.233.63:8747** — a read-only public hub whose entire state
+**https://weftgate.com** — the project site, and
+**https://demo.weftgate.com** — a read-only public hub whose entire state
 (certified landings from three models, a stale-read rejection, a
 revoked-credential rejection, provenance chains to the authority root) was
 produced by the real gate at boot. Click any change to walk its capability

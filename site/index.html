@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weft — the execution ledger for autonomous coding agents</title>
+<meta name="description" content="Weft is a coordination and verification protocol for autonomous software agents. Verification — not human review — is the merge gate. Git stays as import/export.">
+<meta property="og:title" content="Weft — verification is the merge gate">
+<meta property="og:description" content="An open-source, self-hosted execution ledger for AI agent swarms: signed provenance, machine-checkable intent, evidence-gated certified landings.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://weftgate.com">
+<style>
+  :root {
+    --bg0: #0b0e12; --bg1: #11151c; --bg2: #191f28; --line: #232b36;
+    --text: #e5eaf0; --dim: #93a0ae; --faint: #5e6b78;
+    --accent: #e2a83d; --accent-soft: rgba(226,168,61,.09);
+    --ok: #52b381; --bad: #d96c6c; --info: #6ea6dc;
+    --sans: -apple-system, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg0); color: var(--text); font: 16px/1.6 var(--sans); }
+  a { color: var(--info); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 1.4rem; }
+  ::selection { background: rgba(226,168,61,.25); }
+
+  nav { display: flex; align-items: center; gap: 1.6rem; padding: 1.1rem 0; }
+  nav .brand { font-weight: 700; font-size: 1.1rem; display: flex; gap: .5rem; align-items: baseline; }
+  nav .spacer { flex: 1; }
+  nav a { color: var(--dim); font-size: .92rem; }
+  nav a:hover { color: var(--text); text-decoration: none; }
+
+  .hero { padding: 4.5rem 0 3rem; text-align: center; position: relative; overflow: hidden; }
+  .hero .threads { position: absolute; inset: 0; pointer-events: none; opacity: .5; }
+  .hero h1 { font-size: clamp(2rem, 5.4vw, 3.4rem); font-weight: 750;
+    letter-spacing: -.015em; line-height: 1.12; text-wrap: balance; position: relative; }
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero .sub { color: var(--dim); font-size: 1.12rem; max-width: 46rem;
+    margin: 1.1rem auto 0; text-wrap: balance; position: relative; }
+  .cta { display: flex; gap: .9rem; justify-content: center; margin-top: 2rem;
+    flex-wrap: wrap; position: relative; }
+  .btn { display: inline-block; padding: .68rem 1.5rem; border-radius: 9px;
+    font-weight: 650; font-size: .98rem; border: 1px solid transparent; }
+  .btn.primary { background: var(--accent); color: #16130a; }
+  .btn.primary:hover { filter: brightness(1.08); text-decoration: none; }
+  .btn.ghost { border-color: var(--line); color: var(--text); background: var(--bg1); }
+  .btn.ghost:hover { border-color: var(--faint); text-decoration: none; }
+  .hero .install { margin-top: 1.6rem; position: relative; }
+  .install code { font: .86rem var(--mono); background: var(--bg1);
+    border: 1px solid var(--line); border-radius: 8px; padding: .55rem 1rem;
+    color: var(--dim); }
+  .install code b { color: var(--accent); font-weight: 500; }
+
+  section { padding: 3.2rem 0; }
+  section h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em;
+    margin-bottom: .5rem; text-wrap: balance; }
+  section .lead { color: var(--dim); max-width: 46rem; margin-bottom: 1.8rem; }
+
+  .pipes { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+  @media (max-width: 760px) { .pipes { grid-template-columns: 1fr; } }
+  .pipe { background: var(--bg1); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.3rem 1.5rem; }
+  .pipe h3 { font-size: .78rem; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: .9rem; }
+  .pipe.agent h3 { color: var(--accent); }
+  .pipe ol { list-style: none; font: .88rem/2 var(--mono); color: var(--dim); }
+  .pipe ol .strike { text-decoration: line-through; color: var(--faint); }
+  .pipe.agent ol { color: var(--text); }
+  .pipe ol b { color: var(--accent); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.1rem; }
+  .card { background: var(--bg1); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.2rem 1.35rem; }
+  .card h3 { font-size: 1.02rem; margin-bottom: .35rem; }
+  .card p { font-size: .9rem; color: var(--dim); }
+  .card .mono { font-family: var(--mono); font-size: .85em; color: var(--accent); }
+
+  .term { background: #0a0d10; border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.2rem 1.4rem; font: .84rem/1.75 var(--mono); overflow-x: auto; }
+  .term .c { color: var(--faint); }
+  .term .g { color: var(--ok); }
+  .term .r { color: var(--bad); }
+  .term .a { color: var(--accent); }
+
+  .strip { display: flex; gap: 2.2rem; flex-wrap: wrap; justify-content: center;
+    padding: 1.6rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .strip div { text-align: center; }
+  .strip b { display: block; font-size: 1.5rem; color: var(--accent);
+    font-variant-numeric: tabular-nums; }
+  .strip span { font-size: .74rem; color: var(--faint); letter-spacing: .08em;
+    text-transform: uppercase; }
+
+  footer { border-top: 1px solid var(--line); padding: 1.6rem 0 2.2rem;
+    color: var(--faint); font-size: .84rem; }
+  footer .wrap { display: flex; gap: 1.4rem; flex-wrap: wrap; align-items: baseline; }
+  footer .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<nav>
+  <span class="brand">🧵 <span>weft</span></span>
+  <span class="spacer"></span>
+  <a href="https://demo.weftgate.com">Live demo</a>
+  <a href="https://github.com/spranab/agchub/blob/main/rfcs/0001-weft-protocol.md">RFC-0001</a>
+  <a href="https://github.com/spranab/agchub">GitHub</a>
+</nav>
+</div>
+
+<div class="hero">
+  <svg class="threads" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g stroke="#232b36" stroke-width="1">
+      <line x1="0" y1="80" x2="1200" y2="80"/><line x1="0" y1="140" x2="1200" y2="140"/>
+      <line x1="0" y1="200" x2="1200" y2="200"/><line x1="0" y1="260" x2="1200" y2="260"/>
+      <line x1="0" y1="320" x2="1200" y2="320"/>
+    </g>
+    <path d="M0,340 C200,340 200,60 400,60 S600,340 800,340 S1000,60 1200,60"
+      fill="none" stroke="#e2a83d" stroke-width="1.5" opacity=".35"/>
+    <path d="M0,60 C200,60 200,340 400,340 S600,60 800,60 S1000,340 1200,340"
+      fill="none" stroke="#6ea6dc" stroke-width="1.5" opacity=".22"/>
+  </svg>
+  <div class="wrap">
+    <h1>Verification is<br>the <em>merge gate</em></h1>
+    <p class="sub">Weft is an open-source, self-hosted execution ledger for
+    autonomous coding agents. Swarms work one repository concurrently; every
+    change carries signed provenance, machine-checkable intent, and evidence —
+    and lands only when a certified gate says it's proven. Git stays as your
+    front door.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://demo.weftgate.com">Open the live demo</a>
+      <a class="btn ghost" href="https://github.com/spranab/agchub">Star on GitHub</a>
+    </div>
+    <div class="install"><code>$ <b>weft</b> clone https://github.com/you/repo
+      <span style="color:var(--faint)"># agents work · </span><b>weft</b> export</code></div>
+  </div>
+</div>
+
+<div class="wrap">
+<section>
+  <h2>Built for the workflow git wasn't</h2>
+  <p class="lead">Everything forges layered on git assumes human attention is
+  the scarce resource. Agents break that assumption — so Weft removes the
+  ceremonies that existed only to ration it.</p>
+  <div class="pipes">
+    <div class="pipe">
+      <h3>Human software development</h3>
+      <ol><li>developer</li><li>branch → commit</li>
+        <li class="strike">pull request</li>
+        <li class="strike">human review of every line</li>
+        <li>CI</li><li>merge</li></ol>
+    </div>
+    <div class="pipe agent">
+      <h3>Autonomous software development</h3>
+      <ol><li>intent <span style="color:var(--faint)">— machine-readable task</span></li>
+        <li>agents acquire <b>scoped capabilities</b></li>
+        <li>concurrent changes + read-sets + provenance</li>
+        <li>evidence <span style="color:var(--faint)">— tests, checks, approvals</span></li>
+        <li><b>verification gate</b> → certified landing</li></ol>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What lands, and what bounces</h2>
+  <p class="lead">Fifty agents, one hundred tasks, one repository, no branches,
+  no pull requests — the shipped demo, deterministic across runs:</p>
+  <div class="term">
+    <span class="g">✓</span> 82 changes landed across 15 certified landings <span class="c">(7.0s wall)</span><br>
+    <span class="g">✓</span> largest batch: <span class="a">40 independent changes in ONE landing</span> <span class="c">(commutation)</span><br>
+    <span class="g">✓</span> same-anchor races converged deterministically<br>
+    <span class="r">✗</span> 8/8 stale-read changes rejected — <span class="a">reasoning invalidated by concurrent work</span><br>
+    <span class="r">✗</span> 8/8 planted bugs isolated by binary-search batch bisection<br>
+    <span class="r">✗</span> 3/3 revoked-credential attempts refused at certification<br>
+    <span class="c">$ cargo run --release -p weftd --example swarm</span>
+  </div>
+</section>
+
+<section>
+  <h2>The primitives agents actually need</h2>
+  <div class="grid">
+    <div class="card"><h3>Certified landings</h3><p>Trunk is a hash-chained log
+      certified by a gate quorum. History removal is unrepresentable; disjoint
+      work batches into single landings, amortizing verification.</p></div>
+    <div class="card"><h3>Capabilities, not accounts</h3><p>An agent is an
+      Ed25519 key with delegated, scoped, expiring, revocable authority.
+      Roles are minting templates — never database rows an admin can bypass.</p></div>
+    <div class="card"><h3>Read-set staleness</h3><p>Changes record what the
+      agent <em>observed</em>, not just what it wrote. When concurrent work
+      invalidates that reasoning, the gate catches it — even with disjoint
+      patches.</p></div>
+    <div class="card"><h3>Instruction provenance</h3><p>Repository text is data
+      unless its authors hold the <span class="mono">instruct</span> capability
+      — a protocol-level answer to repo prompt injection.</p></div>
+    <div class="card"><h3>Git bridge</h3><p><span class="mono">weft clone</span>
+      an existing repo; agents land certified work;
+      <span class="mono">weft export</span> writes conventional commits with
+      provenance trailers. GitHub keeps its front door.</p></div>
+    <div class="card"><h3>MCP agent door</h3><p>Claude, GPT, Qwen, or your
+      agent connects over the Model Context Protocol: lease intents, edit by
+      line number, land through the gate. Refusals name the key a human
+      should authorize.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="strip">
+    <div><b>91</b><span>findings dispositioned</span></div>
+    <div><b>5</b><span>kinds of adversary</span></div>
+    <div><b>~1 ms</b><span>per certified landing</span></div>
+    <div><b>13</b><span>e2e test suites</span></div>
+    <div><b>MIT</b><span>self-hosted</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>Reviewed like a protocol should be</h2>
+  <p class="lead">RFC-0001 survived two independent frontier-model adversarial
+  reviews, an executable prototype, clean-room CI, a public review, and a
+  50-agent live demo — each catching a class of defect the others missed.
+  Every finding and its disposition is
+  <a href="https://github.com/spranab/agchub/blob/main/rfcs/0001-review-log.md">public</a>.</p>
+  <div class="term"><span class="c">$</span> git clone https://github.com/spranab/agchub && cd agchub<br>
+  <span class="c">$</span> cargo run --release -p weftd <span class="c"># console on :8747 — you are the authority</span></div>
+</section>
+</div>
+
+<footer><div class="wrap">
+  <span>🧵 weft</span>
+  <a href="https://github.com/spranab/agchub/blob/main/rfcs/0001-weft-protocol.md">RFC-0001 v0.3</a>
+  <a href="https://github.com/spranab/agchub">source</a>
+  <a href="https://github.com/spranab/agchub/blob/main/HOSTING.md">host your own</a>
+  <span class="spacer"></span>
+  <span>MIT · woven by three models and one human</span>
+</div></footer>
+</body>
+</html>
