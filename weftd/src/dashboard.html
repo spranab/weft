@@ -1,596 +1,802 @@
 <!doctype html>
 <!--
-  weftd governance console — single file, zero external resources, served at GET /.
-  Notes:
-  - Key→name resolution comes from GET /identities (published identity objects);
-    unresolved keys render as short hex.
-  - Intents close when a landed change carries a `closes` reference (agents do
-    this); the Intents tab renders that state read-only.
+  weft governance console — single self-contained file served at GET /.
+  Application shell: header / sidebar / content / footer. All mutations flow
+  /prepare → WebCrypto Ed25519 sign in-browser → /submit; the private key
+  never leaves this page. Roles are capability minting templates — the UI
+  keeps NO user/role state of its own (RFC-0001 §11).
 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>weftd — governance</title>
+<title>weft — governance console</title>
 <style>
   :root {
-    --bg: #101418; --panel: #171d24; --line: #26303a; --text: #d6dde4;
-    --dim: #7d8b98; --accent: #d9a441; --ok: #5fb281; --bad: #cf6a6a;
-    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+    --bg0: #0c0f13; --bg1: #12161d; --bg2: #1a2028; --bg3: #212a34;
+    --line: #232b35; --line2: #313c49;
+    --text: #e3e9ef; --dim: #919dab; --faint: #5d6a77;
+    --accent: #e2a83d; --accent-soft: rgba(226,168,61,.09);
+    --ok: #52b381; --bad: #d96c6c; --info: #6ea6dc;
+    --sans: -apple-system, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    --r: 10px; --r-s: 7px;
+    --shadow: 0 1px 2px rgba(0,0,0,.25), 0 4px 16px rgba(0,0,0,.18);
   }
   * { box-sizing: border-box; margin: 0; }
-  body { background: var(--bg); color: var(--text); font: 14px/1.55 var(--mono); padding: 1.2rem; display: flex; flex-direction: column; min-height: 100vh; }
-  h1 { font-size: 1.05rem; letter-spacing: .04em; }
-  h1 .thread { color: var(--accent); }
-  h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin-bottom: .6rem; }
-  header { display: flex; gap: 1.4rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 1.1rem; }
-  header .stat b { color: var(--accent); font-weight: 600; }
-  .dot { width: .55em; height: .55em; border-radius: 50%; display: inline-block; background: var(--ok); }
-  .dot.bad { background: var(--bad); }
-  .app { display: flex; gap: 1rem; align-items: flex-start; flex: 1; }
-  nav { display: flex; flex-direction: column; gap: .3rem; min-width: 9.5rem; position: sticky; top: 1rem; }
-  nav .tab { background: none; border: 1px solid transparent; color: var(--dim); font: inherit; text-align: left; padding: .35rem .7rem; border-radius: 6px; cursor: pointer; }
-  nav .tab:hover { color: var(--text); }
-  nav .tab.active { color: var(--accent); border-color: var(--line); background: var(--panel); }
-  main { flex: 1; min-width: 0; }
-  .grid { display: grid; grid-template-columns: minmax(0,3fr) minmax(0,2fr); gap: 1rem; }
-  .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,2fr); gap: 1rem; }
-  @media (max-width: 900px) {
-    .grid, .grid2 { grid-template-columns: 1fr; }
-    .app { flex-direction: column; }
-    nav { flex-direction: row; flex-wrap: wrap; position: static; }
+  html, body { height: 100%; }
+  body { background: var(--bg0); color: var(--text);
+         font: 14px/1.55 var(--sans); display: flex; flex-direction: column; }
+  a { color: var(--info); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ::selection { background: rgba(226,168,61,.25); }
+
+  /* ── header ─────────────────────────────────────────────── */
+  .top {
+    height: 54px; flex: none; display: flex; align-items: center; gap: 1rem;
+    padding: 0 1.1rem; background: var(--bg1);
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20;
   }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem; margin-bottom: 1rem; overflow-x: auto; }
-  .landing { border-left: 3px solid var(--accent); padding: .45rem .7rem; margin: .5rem 0; background: rgba(217,164,65,.05); }
-  .landing .seq { color: var(--accent); }
-  .chg { cursor: pointer; padding: .1rem 0 .1rem 1rem; }
-  .chg:hover { color: var(--accent); }
-  .chg.flat { cursor: default; }
-  .chg.flat:hover { color: inherit; }
-  .model { color: var(--ok); }
-  .model.human { color: var(--dim); }
-  .oid { color: var(--dim); }
-  .warn { color: var(--bad); padding-left: 1rem; font-size: .85em; }
-  pre.file { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .6rem .8rem; margin: .4rem 0 1rem; overflow-x: auto; }
-  .cap { border-left: 2px solid var(--line); margin: .35rem 0 .35rem .4rem; padding: .25rem .7rem; }
-  .cap.root { border-left-color: var(--ok); }
-  .cap.revoked { opacity: .55; }
-  .cap.revoked .who, .cap.revoked .scope { text-decoration: line-through; }
-  .cap .who { color: var(--text); }
-  .cap .scope { color: var(--dim); font-size: .85em; }
-  .badge { display: inline-block; border: 1px solid var(--ok); color: var(--ok); border-radius: 4px; font-size: .7em; padding: 0 .35em; letter-spacing: .06em; }
-  .chip { display: inline-block; border: 1px solid var(--dim); color: var(--dim); border-radius: 4px; font-size: .72em; padding: 0 .4em; letter-spacing: .05em; vertical-align: middle; }
-  .chip.ok { border-color: var(--ok); color: var(--ok); }
-  .chip.bad { border-color: var(--bad); color: var(--bad); }
-  .chip.amber { border-color: var(--accent); color: var(--accent); }
-  .card { border: 1px solid var(--line); border-radius: 6px; padding: .5rem .7rem; margin: .45rem 0; }
-  .pend { border-left: 3px solid var(--accent); background: rgba(217,164,65,.06); padding: .45rem .7rem; margin: .4rem 0; border-radius: 0 6px 6px 0; }
-  .btn { background: rgba(217,164,65,.08); border: 1px solid var(--accent); color: var(--accent); font: inherit; font-size: .85em; padding: .25rem .7rem; border-radius: 6px; cursor: pointer; }
-  .btn:hover:not(:disabled) { background: rgba(217,164,65,.18); }
-  .btn:disabled { opacity: .45; cursor: not-allowed; border-color: var(--dim); color: var(--dim); }
-  .btn.small { font-size: .75em; padding: .05rem .5rem; }
-  input, textarea, select { background: var(--bg); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: .9em; border-radius: 6px; padding: .35rem .55rem; }
+  .brand { display: flex; align-items: baseline; gap: .55rem; }
+  .brand .mark { font-size: 1.15rem; }
+  .brand .name { font-weight: 650; font-size: 1.02rem; letter-spacing: .02em; }
+  .brand .sub { color: var(--faint); font-size: .78rem; }
+  .repo-chip { font: .78rem var(--mono); color: var(--dim);
+    background: var(--bg2); border: 1px solid var(--line);
+    padding: .18rem .55rem; border-radius: 99px; }
+  .top .spacer { flex: 1; }
+  .stat { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+  .stat b { font-variant-numeric: tabular-nums; font-size: .95rem; color: var(--text); }
+  .stat span { font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; color: var(--faint); }
+  .idchip { display: flex; align-items: center; gap: .45rem;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 99px;
+    padding: .25rem .7rem; font-size: .8rem; cursor: pointer; }
+  .idchip:hover { border-color: var(--line2); }
+  .idchip .k { font-family: var(--mono); color: var(--accent); }
+  .dot { width: .55em; height: .55em; border-radius: 50%; background: var(--ok); flex: none; }
+  .dot.bad { background: var(--bad); }
+  .ro-badge { border: 1px solid var(--info); color: var(--info);
+    font-size: .68rem; letter-spacing: .08em; padding: .1rem .5rem;
+    border-radius: 4px; text-transform: uppercase; }
+
+  /* ── layout ─────────────────────────────────────────────── */
+  .shell { flex: 1; display: flex; min-height: 0; }
+  aside {
+    width: 208px; flex: none; background: var(--bg1);
+    border-right: 1px solid var(--line); padding: 1rem .7rem;
+    display: flex; flex-direction: column; gap: .15rem;
+  }
+  aside .group { font-size: .64rem; letter-spacing: .14em; color: var(--faint);
+    text-transform: uppercase; margin: .9rem .55rem .3rem; }
+  aside .group:first-child { margin-top: 0; }
+  .nav { display: flex; align-items: center; gap: .6rem; width: 100%;
+    background: none; border: none; color: var(--dim); font: inherit;
+    font-size: .88rem; text-align: left; padding: .42rem .6rem;
+    border-radius: var(--r-s); cursor: pointer; }
+  .nav:hover { color: var(--text); background: var(--bg2); }
+  .nav.active { color: var(--text); background: var(--accent-soft); }
+  .nav.active .ico { color: var(--accent); }
+  .nav .ico { width: 1.1em; text-align: center; color: var(--faint); }
+  main { flex: 1; min-width: 0; overflow-y: auto; padding: 1.4rem 1.6rem 2.5rem; }
+  .page { max-width: 1160px; margin: 0 auto; }
+  .page-head { display: flex; align-items: baseline; gap: .9rem; margin-bottom: 1.1rem; }
+  .page-head h1 { font-size: 1.25rem; font-weight: 650; letter-spacing: .01em; }
+  .page-head .desc { color: var(--dim); font-size: .86rem; }
+
+  /* ── panels & primitives ────────────────────────────────── */
+  .panel { background: var(--bg1); border: 1px solid var(--line);
+    border-radius: var(--r); box-shadow: var(--shadow); margin-bottom: 1.1rem; }
+  .panel > header { display: flex; align-items: center; gap: .7rem;
+    padding: .7rem 1rem; border-bottom: 1px solid var(--line); }
+  .panel > header h2 { font-size: .74rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--dim); font-weight: 600; }
+  .panel .body { padding: .9rem 1rem; overflow-x: auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr));
+    gap: .8rem; margin-bottom: 1.1rem; }
+  .tile { background: var(--bg1); border: 1px solid var(--line);
+    border-radius: var(--r); padding: .75rem .95rem; }
+  .tile b { display: block; font-size: 1.45rem; font-weight: 650;
+    font-variant-numeric: tabular-nums; }
+  .tile span { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--faint); }
+  .tile.amber b { color: var(--accent); }
+  .mono { font-family: var(--mono); }
+  .oid { font-family: var(--mono); color: var(--faint); font-size: .82em; }
+  .chip { display: inline-block; border: 1px solid var(--line2); color: var(--dim);
+    border-radius: 4px; font-size: .7rem; padding: .02rem .45rem;
+    letter-spacing: .04em; vertical-align: middle; white-space: nowrap; }
+  .chip.ok { border-color: rgba(82,179,129,.5); color: var(--ok); }
+  .chip.bad { border-color: rgba(217,108,108,.5); color: var(--bad); }
+  .chip.amber { border-color: rgba(226,168,61,.55); color: var(--accent); }
+  .chip.info { border-color: rgba(110,166,220,.5); color: var(--info); }
+  .btn { background: var(--accent-soft); border: 1px solid var(--accent);
+    color: var(--accent); font: 600 .84rem var(--sans); padding: .38rem .95rem;
+    border-radius: var(--r-s); cursor: pointer; }
+  .btn:hover:not(:disabled) { background: rgba(226,168,61,.18); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.ghost { background: none; border-color: var(--line2); color: var(--dim); }
+  .btn.ghost:hover:not(:disabled) { color: var(--text); border-color: var(--faint); background: var(--bg2); }
+  .btn.sm { font-size: .74rem; padding: .18rem .6rem; }
+  input, textarea, select { background: var(--bg0); border: 1px solid var(--line2);
+    color: var(--text); font: .88rem var(--sans); border-radius: var(--r-s);
+    padding: .4rem .6rem; }
   input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
-  textarea { min-height: 4.5em; resize: vertical; width: 100%; }
-  .row { display: flex; gap: .7rem; flex-wrap: wrap; align-items: flex-end; margin: .45rem 0; }
-  label.f { display: flex; flex-direction: column; gap: .15rem; font-size: .78em; color: var(--dim); }
-  .filelink { cursor: pointer; padding: .12rem .35rem; border-radius: 4px; }
-  .filelink:hover { color: var(--accent); }
-  .filelink.sel { color: var(--accent); background: rgba(217,164,65,.08); }
-  .keyhex { word-break: break-all; color: var(--accent); font-size: .85em; }
-  .danger { color: var(--bad); font-size: .8em; margin-top: .5rem; }
-  .dim { color: var(--dim); }
-  .empty { color: var(--dim); font-style: italic; }
-  .banner { background: rgba(207,106,106,.1); border: 1px solid var(--bad); color: var(--bad); padding: .5rem .8rem; border-radius: 8px; margin-bottom: 1rem; }
-  #toasts { position: fixed; top: 1rem; right: 1rem; display: flex; flex-direction: column; gap: .5rem; z-index: 99; max-width: 22rem; }
-  .toast { padding: .5rem .8rem; border-radius: 6px; border: 1px solid var(--ok); color: var(--ok); background: var(--panel); font-size: .85em; word-break: break-word; }
+  textarea { width: 100%; min-height: 4.2em; resize: vertical; font-family: var(--mono); font-size: .82rem; }
+  label.f { display: flex; flex-direction: column; gap: .22rem;
+    font-size: .72rem; color: var(--dim); letter-spacing: .03em; }
+  .row { display: flex; gap: .8rem; flex-wrap: wrap; align-items: flex-end; margin: .5rem 0; }
+  .empty { color: var(--faint); font-style: italic; padding: .4rem 0; }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.8fr); gap: 1.1rem; }
+  @media (max-width: 980px) { .grid2 { grid-template-columns: 1fr; }
+    aside { width: 60px; } aside .group, aside .nav .txt { display: none; } }
+
+  /* ── landings ───────────────────────────────────────────── */
+  .landing { border-left: 3px solid var(--accent); background: var(--bg2);
+    border-radius: 0 var(--r-s) var(--r-s) 0; padding: .55rem .85rem; margin: .6rem 0; }
+  .landing .l-head { display: flex; gap: .7rem; align-items: baseline; flex-wrap: wrap; }
+  .landing .seq { color: var(--accent); font-weight: 650; font-variant-numeric: tabular-nums; }
+  .chg { display: flex; gap: .55rem; align-items: baseline; padding: .18rem 0 .18rem .35rem;
+    border-radius: 5px; cursor: pointer; flex-wrap: wrap; }
+  .chg:hover { background: var(--bg3); }
+  .chg.flat { cursor: default; }
+  .chg.flat:hover { background: none; }
+  .chg .msg { color: var(--text); }
+  .warn { color: var(--bad); font-size: .8rem; padding-left: .4rem; }
+  .model-claude { border-color: rgba(226,168,61,.55); color: var(--accent); }
+  .model-gpt { border-color: rgba(110,166,220,.5); color: var(--info); }
+  .model-qwen { border-color: rgba(82,179,129,.5); color: var(--ok); }
+
+  /* ── provenance drawer ──────────────────────────────────── */
+  .drawer { position: fixed; top: 54px; right: 0; bottom: 0; width: min(430px, 92vw);
+    background: var(--bg1); border-left: 1px solid var(--line2);
+    box-shadow: -12px 0 32px rgba(0,0,0,.35); z-index: 30; padding: 1.1rem 1.2rem;
+    overflow-y: auto; transform: translateX(105%); transition: transform .18s ease; }
+  .drawer.open { transform: none; }
+  @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+  .drawer h3 { font-size: .78rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); margin-bottom: .8rem; display: flex; justify-content: space-between; }
+  .cap { border-left: 2px solid var(--line2); margin: .5rem 0 .5rem .2rem;
+    padding: .35rem .8rem; }
+  .cap.root { border-left-color: var(--ok); }
+  .cap .who { font-size: .86rem; }
+  .cap .scope { color: var(--dim); font-size: .78rem; }
+  .badge-root { border: 1px solid var(--ok); color: var(--ok); border-radius: 4px;
+    font-size: .64rem; padding: 0 .4rem; letter-spacing: .08em; }
+
+  /* ── files ──────────────────────────────────────────────── */
+  .filelist { display: flex; flex-direction: column; gap: .1rem; }
+  .filelink { display: flex; justify-content: space-between; gap: .6rem;
+    padding: .35rem .6rem; border-radius: var(--r-s); cursor: pointer;
+    font-family: var(--mono); font-size: .84rem; color: var(--dim); }
+  .filelink:hover { background: var(--bg2); color: var(--text); }
+  .filelink.sel { background: var(--accent-soft); color: var(--accent); }
+  pre.code { background: var(--bg0); border: 1px solid var(--line);
+    border-radius: var(--r-s); padding: .7rem 0; overflow-x: auto;
+    font: .82rem/1.6 var(--mono); }
+  pre.code .ln { display: inline-block; width: 3.2em; text-align: right;
+    padding-right: 1em; color: var(--faint); user-select: none; }
+  .data-banner { display: flex; gap: .5rem; align-items: center;
+    background: rgba(217,108,108,.08); border: 1px solid rgba(217,108,108,.4);
+    color: var(--bad); border-radius: var(--r-s); padding: .45rem .8rem;
+    font-size: .8rem; margin-bottom: .6rem; }
+
+  /* ── hero / onboarding ──────────────────────────────────── */
+  .hero { text-align: center; padding: 3rem 1rem 2.2rem; }
+  .hero .mark { font-size: 2.6rem; }
+  .hero h1 { font-size: 1.6rem; font-weight: 650; margin: .4rem 0 .35rem; }
+  .hero p { color: var(--dim); max-width: 44rem; margin: 0 auto; }
+  .hero-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px,1fr));
+    gap: 1.1rem; max-width: 760px; margin: 1.8rem auto 0; text-align: left; }
+  .hcard { background: var(--bg1); border: 1px solid var(--line);
+    border-radius: var(--r); padding: 1.2rem 1.3rem; box-shadow: var(--shadow); }
+  .hcard h3 { font-size: 1rem; margin-bottom: .35rem; }
+  .hcard p { font-size: .85rem; color: var(--dim); margin-bottom: .9rem; }
+  .cmd { position: relative; background: var(--bg0); border: 1px solid var(--line);
+    border-radius: var(--r-s); padding: .55rem 2.4rem .55rem .8rem;
+    font: .78rem/1.5 var(--mono); color: var(--text); overflow-x: auto;
+    white-space: pre; margin: .45rem 0; }
+  .cmd .copy { position: absolute; top: .35rem; right: .4rem; }
+
+  /* ── footer, toasts ─────────────────────────────────────── */
+  footer.app { flex: none; border-top: 1px solid var(--line); background: var(--bg1);
+    padding: .55rem 1.2rem; display: flex; gap: 1.2rem; align-items: center;
+    font-size: .74rem; color: var(--faint); flex-wrap: wrap; }
+  footer.app .spacer { flex: 1; }
+  #toasts { position: fixed; bottom: 1.2rem; right: 1.2rem; display: flex;
+    flex-direction: column; gap: .5rem; z-index: 99; max-width: 23rem; }
+  .toast { padding: .55rem .9rem; border-radius: var(--r-s); border: 1px solid var(--ok);
+    color: var(--ok); background: var(--bg1); font-size: .82rem;
+    box-shadow: var(--shadow); word-break: break-word; }
   .toast.err { border-color: var(--bad); color: var(--bad); }
-  footer { color: var(--dim); font-size: .8em; margin-top: .5rem; }
+  .banner { background: rgba(217,108,108,.08); border: 1px solid var(--bad);
+    color: var(--bad); padding: .5rem .9rem; border-radius: var(--r-s); margin-bottom: 1rem; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1.2rem;
+    font-size: .86rem; }
+  .kv dt { color: var(--faint); }
+  .kv dd { font-family: var(--mono); font-size: .8rem; word-break: break-all; }
+  .keyhex { font-family: var(--mono); font-size: .78rem; color: var(--accent);
+    word-break: break-all; }
+  .danger { color: var(--bad); font-size: .76rem; margin-top: .5rem; }
+  .card { border: 1px solid var(--line); border-radius: var(--r-s);
+    padding: .6rem .85rem; margin: .5rem 0; background: var(--bg2); }
+  .card.revoked { opacity: .5; }
+  .card.revoked .who { text-decoration: line-through; }
 </style>
 </head>
 <body>
-<div id="edbanner" class="banner" style="display:none">⚠ this browser does not support
-Ed25519 in WebCrypto — signing is disabled, the console is read-only</div>
-<header>
-  <h1><span class="thread">🧵 weft</span> / governance</h1>
-  <span class="stat">repo <b id="st-repo">–</b></span>
-  <span class="stat">trunk seq <b id="st-seq">–</b></span>
-  <span class="stat">queued <b id="st-queued">–</b></span>
-  <span class="stat">gate <b id="st-gate">–</b></span>
-  <span class="dot" id="conn" title="daemon connection"></span>
+
+<header class="top">
+  <div class="brand"><span class="mark">🧵</span>
+    <span class="name">weft</span><span class="sub">governance console</span></div>
+  <span class="repo-chip" id="h-repo">no repository</span>
+  <span class="ro-badge" id="h-ro" style="display:none">read-only demo</span>
+  <div class="spacer"></div>
+  <div class="stat"><b id="h-seq">–</b><span>trunk seq</span></div>
+  <div class="stat"><b id="h-queued">–</b><span>queued</span></div>
+  <div class="stat"><b id="h-pending">–</b><span>approvals due</span></div>
+  <div class="idchip" onclick="show('access')" title="identity — Access tab">
+    <span class="dot" id="h-conn"></span><span id="h-id">no key</span></div>
+  <a href="https://github.com/spranab/agchub" target="_blank" rel="noopener"
+     title="GitHub" style="color:var(--dim);font-size:1.05rem">★</a>
 </header>
 
-<div class="app">
-<nav>
-  <button class="tab active" data-tab="overview" onclick="show('overview')">Overview</button>
-  <button class="tab" data-tab="intents" onclick="show('intents')">Intents</button>
-  <button class="tab" data-tab="files" onclick="show('files')">Files</button>
-  <button class="tab" data-tab="access" onclick="show('access')">Access</button>
-  <button class="tab" data-tab="policy" onclick="show('policy')">Policy</button>
-</nav>
-<main>
+<div class="shell">
+<aside>
+  <div class="group">Work</div>
+  <button class="nav active" data-t="overview" onclick="show('overview')"><span class="ico">◉</span><span class="txt">Overview</span></button>
+  <button class="nav" data-t="intents" onclick="show('intents')"><span class="ico">☰</span><span class="txt">Intents</span></button>
+  <button class="nav" data-t="files" onclick="show('files')"><span class="ico">▤</span><span class="txt">Files</span></button>
+  <div class="group">Trust</div>
+  <button class="nav" data-t="access" onclick="show('access')"><span class="ico">🗝</span><span class="txt">Access</span></button>
+  <button class="nav" data-t="policy" onclick="show('policy')"><span class="ico">⚖</span><span class="txt">Policy</span></button>
+  <div class="group">Interop</div>
+  <button class="nav" data-t="bridge" onclick="show('bridge')"><span class="ico">⇄</span><span class="txt">Git bridge</span></button>
+</aside>
 
-<!-- ══ OVERVIEW ══ -->
-<div id="tab-overview" class="tabpane">
-  <section id="pending-sec" style="display:none">
-    <h2>Pending approvals</h2>
-    <div id="pending"></div>
-  </section>
-  <div class="grid">
-    <div>
-      <section>
-        <h2>Certified landing log</h2>
-        <div id="log" class="empty">no landings yet</div>
-      </section>
+<main><div class="page">
+  <div id="edbanner" class="banner" style="display:none">⚠ This browser lacks
+  WebCrypto Ed25519 — signing is disabled; the console is read-only for you.</div>
+
+  <!-- ═ HERO (no repo yet) ═ -->
+  <div id="tab-hero" class="tabpane" style="display:none">
+    <div class="hero">
+      <div class="mark">🧵</div>
+      <h1>The execution ledger for autonomous coding agents</h1>
+      <p>Verification — not human review — is the merge gate. Every change
+      carries signed provenance, machine-checkable intent, and evidence.
+      This hub has no repository yet.</p>
     </div>
-    <div>
-      <section>
-        <h2>Provenance <span class="oid" id="prov-target"></span></h2>
-        <div id="prov" class="empty">click a change to walk its capability chain
-          to the authority root</div>
-      </section>
-      <section>
-        <h2>Rejections</h2>
-        <div id="rejects" class="empty">none</div>
-      </section>
+    <div class="hero-cards">
+      <div class="hcard">
+        <h3>Create a repository</h3>
+        <p>Your browser key becomes the authority root. Delegate roles,
+        set policy, approve landings — every action signed in-page.</p>
+        <div class="row">
+          <label class="f">name<input id="repo-name" size="18" value="my-project"></label>
+          <button class="btn needs-key" onclick="createRepo(this)">Sign genesis</button>
+        </div>
+        <p class="danger" id="hero-key-hint" style="display:none">
+          generate an identity key in Access first</p>
+      </div>
+      <div class="hcard">
+        <h3>Bridge an existing GitHub repo</h3>
+        <p>Import a git HEAD through the gate; agents land certified work;
+        export conventional commits back — GitHub keeps its front door.</p>
+        <div class="cmd">weft clone https://github.com/you/repo<button class="btn ghost sm copy" onclick="copyCmd(this)">⧉</button></div>
+        <p style="font-size:.78rem;color:var(--faint)">runs the <span class="mono">weft</span> CLI
+        against this hub — see the Git bridge tab after import</p>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ══ INTENTS ══ -->
-<div id="tab-intents" class="tabpane" style="display:none">
-  <section>
-    <h2>Create intent</h2>
-    <div class="row">
-      <label class="f">title<input id="in-title" size="32" placeholder="short task name"></label>
-      <label class="f">goal<input id="in-goal" size="44" placeholder="what done looks like"></label>
+  <!-- ═ OVERVIEW ═ -->
+  <div id="tab-overview" class="tabpane">
+    <div class="page-head"><h1>Overview</h1>
+      <span class="desc">certified landings, live from the gate</span></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="panel" id="pending-panel" style="display:none">
+      <header><h2>Pending approvals</h2><span class="chip amber">action needed</span></header>
+      <div class="body" id="pending"></div>
     </div>
-    <label class="f">acceptance criteria — one per line
-      <textarea id="in-criteria" placeholder="tests pass&#10;no new clippy warnings"></textarea></label>
-    <div class="row"><button class="btn needs-key" onclick="createIntent(this)">Sign &amp; publish intent</button></div>
-  </section>
-  <section>
-    <h2>Intents</h2>
-    <div id="intents" class="empty">none yet</div>
-  </section>
-</div>
-
-<!-- ══ FILES ══ -->
-<div id="tab-files" class="tabpane" style="display:none">
-  <div class="grid2">
-    <div>
-      <section>
-        <h2>Workspace <span class="oid">head seq <span id="files-seq">–</span></span></h2>
-        <div id="filelist" class="empty">no files at head</div>
-      </section>
+    <div class="panel">
+      <header><h2>Certified landing log</h2>
+        <span class="chip" id="log-count"></span></header>
+      <div class="body" id="log"><div class="empty">no landings yet</div></div>
     </div>
-    <div>
-      <section>
-        <h2>File <span class="oid" id="file-name"></span></h2>
-        <div id="fileview" class="empty">select a file</div>
-      </section>
+    <div class="panel" id="rejects-panel" style="display:none">
+      <header><h2>Rejections</h2><span class="chip bad">gate refused</span></header>
+      <div class="body" id="rejects"></div>
     </div>
   </div>
-</div>
 
-<!-- ══ ACCESS ══ -->
-<div id="tab-access" class="tabpane" style="display:none">
-  <section id="repo-create" style="display:none">
-    <h2>Create repository</h2>
-    <p class="dim" style="font-size:.85em">No repository exists on this daemon yet.
-      Minting genesis writes <em>this browser's key</em> into the authority set —
-      you become the root of trust that every capability chain must terminate at.</p>
-    <div class="row">
-      <label class="f">repository name<input id="repo-name" size="24" placeholder="my-swarm"></label>
-      <button class="btn needs-key" onclick="createRepo(this)">Sign genesis</button>
+  <!-- ═ INTENTS ═ -->
+  <div id="tab-intents" class="tabpane" style="display:none">
+    <div class="page-head"><h1>Intents</h1>
+      <span class="desc">the work graph — what should happen, machine-readable</span></div>
+    <div class="panel"><header><h2>Create intent</h2></header>
+      <div class="body">
+        <div class="row">
+          <label class="f">title<input id="int-title" size="34"></label>
+          <label class="f">goal<input id="int-goal" size="44"></label>
+        </div>
+        <label class="f">acceptance criteria — one per line
+          <textarea id="int-criteria"></textarea></label>
+        <div class="row"><button class="btn needs-key" onclick="createIntent(this)">Sign intent</button></div>
+      </div></div>
+    <div class="panel"><header><h2>All intents</h2></header>
+      <div class="body" id="intents"><div class="empty">none yet</div></div></div>
+  </div>
+
+  <!-- ═ FILES ═ -->
+  <div id="tab-files" class="tabpane" style="display:none">
+    <div class="page-head"><h1>Files</h1>
+      <span class="desc">head workspace · seq <span id="ws-seq" class="mono">–</span></span></div>
+    <div class="grid2">
+      <div class="panel"><header><h2>Tree</h2></header>
+        <div class="body filelist" id="filelist"><div class="empty">empty</div></div></div>
+      <div class="panel"><header><h2 id="file-title">Select a file</h2>
+        <span class="chip" id="file-badge" style="display:none"></span></header>
+        <div class="body" id="fileview"><div class="empty">nothing selected</div></div></div>
     </div>
-  </section>
-  <section>
-    <h2>Identity</h2>
-    <div id="ident"></div>
-  </section>
-  <section>
-    <h2>Role console — capability minting</h2>
-    <p class="dim" style="font-size:.8em;margin-bottom:.4rem">roles are minting templates
-      over the capability graph — there is no user database behind this form (RFC-0001 §11)</p>
-    <div class="row">
-      <label class="f">role template
-        <select id="role-sel" onchange="roleChanged()">
-          <option value="maintainer">Maintainer</option>
-          <option value="contributor">Contributor</option>
-          <option value="reader">Reader</option>
-          <option value="custom">Custom</option>
-        </select></label>
-      <label class="f">audience public key (64 hex)
-        <input id="role-aud" size="50" placeholder="agent or human Ed25519 pubkey"></label>
-      <label class="f">expiry
-        <select id="role-exp">
-          <option value="3600000">1h</option>
-          <option value="86400000" selected>24h</option>
-          <option value="604800000">7d</option>
-          <option value="2592000000">30d</option>
-        </select></label>
-    </div>
-    <div class="row" id="role-paths-row" style="display:none">
-      <label class="f">paths — comma-separated globs
-        <input id="role-paths" size="40" value="src/**"></label>
-    </div>
-    <div class="row" id="role-actions-row" style="display:none"><span id="role-actions"></span></div>
-    <div class="row"><button class="btn needs-key" onclick="mintCap(this)">Mint capability</button></div>
-  </section>
-  <section>
-    <h2>Capabilities</h2>
-    <div id="caps" class="empty">none</div>
-  </section>
+  </div>
+
+  <!-- ═ ACCESS ═ -->
+  <div id="tab-access" class="tabpane" style="display:none">
+    <div class="page-head"><h1>Access</h1>
+      <span class="desc">identity &amp; capability graph — roles are minting templates, never database rows</span></div>
+    <div class="panel"><header><h2>Your identity</h2></header>
+      <div class="body" id="ident"></div></div>
+    <div class="panel" id="role-panel"><header><h2>Delegate a role</h2></header>
+      <div class="body">
+        <div class="row">
+          <label class="f">role template
+            <select id="role-sel" onchange="roleChanged()">
+              <option value="maintainer">Maintainer</option>
+              <option value="contributor" selected>Contributor</option>
+              <option value="reader">Reader</option>
+              <option value="custom">Custom…</option>
+            </select></label>
+          <label class="f">audience public key (64 hex)
+            <input id="role-aud" size="46" placeholder="agent or human Ed25519 pubkey"></label>
+          <label class="f">expiry
+            <select id="role-exp"><option value="3600000">1 hour</option>
+              <option value="86400000" selected>24 hours</option>
+              <option value="604800000">7 days</option>
+              <option value="2592000000">30 days</option></select></label>
+        </div>
+        <div class="row" id="role-paths-row">
+          <label class="f">path scope (comma-separated globs)
+            <input id="role-paths" size="40" value="src/**"></label>
+        </div>
+        <div class="row" id="role-actions-row" style="display:none"><div id="role-actions"></div></div>
+        <div class="row"><button class="btn needs-key" onclick="mintCap(this)">Mint capability</button></div>
+      </div></div>
+    <div class="panel"><header><h2>Capability graph</h2></header>
+      <div class="body" id="caps"><div class="empty">none</div></div></div>
+  </div>
+
+  <!-- ═ POLICY ═ -->
+  <div id="tab-policy" class="tabpane" style="display:none">
+    <div class="page-head"><h1>Policy</h1>
+      <span class="desc">the machine-enforceable merge gate</span></div>
+    <div class="panel"><header><h2>Active policy</h2></header>
+      <div class="body" id="policy"></div></div>
+  </div>
+
+  <!-- ═ BRIDGE ═ -->
+  <div id="tab-bridge" class="tabpane" style="display:none">
+    <div class="page-head"><h1>Git bridge</h1>
+      <span class="desc">GitHub keeps its front door — Weft is the agent-side execution layer</span></div>
+    <div class="panel"><header><h2>Upstream</h2><span class="chip info" id="bridge-state">not bridged</span></header>
+      <div class="body" id="bridge-info"></div></div>
+    <div class="panel"><header><h2>Export landed history</h2></header>
+      <div class="body">
+        <p style="font-size:.85rem;color:var(--dim);margin-bottom:.4rem">
+          Writes every certified landing as conventional git commits — chained
+          onto the original base commit, with
+          <span class="mono">Weft-Change / Weft-Model / Weft-Author-Key</span>
+          trailers. Byte-deterministic: re-export produces the identical sha.</p>
+        <div class="cmd" id="cmd-export">weft export --git ./yourrepo<button class="btn ghost sm copy" onclick="copyCmd(this)">⧉</button></div>
+        <p style="font-size:.78rem;color:var(--faint)">then
+          <span class="mono">git log weft-export</span> · commits count:
+          <b class="mono" id="bridge-exportable">0</b></p>
+      </div></div>
+    <div class="panel"><header><h2>Bridge a repo into this hub</h2></header>
+      <div class="body">
+        <div class="cmd">weft clone https://github.com/you/repo<button class="btn ghost sm copy" onclick="copyCmd(this)">⧉</button></div>
+        <div class="cmd">weft init --git ./existing-checkout<button class="btn ghost sm copy" onclick="copyCmd(this)">⧉</button></div>
+        <p style="font-size:.78rem;color:var(--faint)">the import itself lands
+          through the gate — no side doors. v1 imports the HEAD tree (text
+          files); full-history import is on the roadmap.</p>
+      </div></div>
+  </div>
+</div></main>
 </div>
 
-<!-- ══ POLICY ══ -->
-<div id="tab-policy" class="tabpane" style="display:none">
-  <section>
-    <h2>Repository policy <span class="chip">read-only</span></h2>
-    <div id="policy" class="empty">loading…</div>
-  </section>
-</div>
+<footer class="app">
+  <span>🧵 weft</span>
+  <span><a href="https://github.com/spranab/agchub/blob/main/rfcs/0001-weft-protocol.md"
+    target="_blank" rel="noopener">RFC-0001 v0.3</a></span>
+  <span class="mono">protocol weft/0.1</span>
+  <span class="spacer"></span>
+  <span id="f-note"></span>
+  <span><a href="https://github.com/spranab/agchub" target="_blank" rel="noopener">source</a></span>
+  <span><a href="https://github.com/spranab/agchub/blob/main/HOSTING.md"
+    target="_blank" rel="noopener">host your own</a></span>
+</footer>
 
-</main>
+<div class="drawer" id="drawer">
+  <h3>Provenance <button class="btn ghost sm" onclick="$('drawer').classList.remove('open')">✕</button></h3>
+  <div id="prov"><div class="empty">click a change to walk its capability
+  chain to the authority root</div></div>
 </div>
-
-<footer>every mutation minted above this line requires a signed capability chain;
-the UI renders the graph, it never owns it (RFC-0001 §11)</footer>
 <div id="toasts"></div>
 
 <script>
-"use strict";
-/* ── state ─────────────────────────────────────────────────────── */
-let KEY = null;        // Ed25519 private CryptoKey (never leaves this page)
-let PUB = null;        // 64-char hex public key
-let EDOK = true;       // WebCrypto Ed25519 available
-let REPO = null;       // repo oid hex or null (no genesis yet)
-let GATE = null;       // gate pubkey hex
-let TAB = "overview";
-let FILELIST = [];
-const ACTIONS = ["publish_change","propose","approve","delegate","create_intent","policy","read"];
-const ROLES = {
-  maintainer:  { actions: ["publish_change","propose","approve","delegate","create_intent","policy"], paths: ["**"] },
-  contributor: { actions: ["publish_change","propose"], paths: null },   // paths from input
-  reader:      { actions: ["read"], paths: ["**"] },
-};
-
-/* ── tiny helpers ──────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;")
-  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-const hx = s => String(s || "").replace(/[^0-9a-fA-F]/g, "").toLowerCase();
-const short = (h, n = 10) => h ? hx(h).slice(0, n) + "…" : "–";
-const toHex = b => [...b].map(x => x.toString(16).padStart(2, "0")).join("");
-const fromHex = h => new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
-const b64uToBytes = s => { s = s.replace(/-/g,"+").replace(/_/g,"/");
-  while (s.length % 4) s += "="; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const hx = s => String(s).replace(/[^0-9a-f]/gi, "").toLowerCase();
+const short = (s, n = 10) => esc(String(s).slice(0, n)) + "…";
+const toHex = b => [...b].map(x => x.toString(16).padStart(2,"0")).join("");
+const fromHex = s => new Uint8Array(s.match(/../g).map(x => parseInt(x,16)));
+const b64uToBytes = s => Uint8Array.from(
+  atob(s.replace(/-/g,"+").replace(/_/g,"/")), c => c.charCodeAt(0));
 
+let KEY = null, PUB = null, EDOK = true, REPO = null, GATE = null,
+    READONLY = false, TAB = "overview", NAMES = {};
+
+function toast(msg, ok = true) {
+  const el = document.createElement("div");
+  el.className = "toast" + (ok ? "" : " err");
+  el.textContent = msg;
+  $("toasts").appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
 async function jget(p) {
   const r = await fetch(p);
-  if (!r.ok) throw new Error(`${p} → HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`${p} → ${r.status}`);
   return r.json();
 }
 async function jpost(p, body) {
-  const r = await fetch(p, { method: "POST",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  let d = null; try { d = await r.json(); } catch (_) {}
-  if (d && d.error) throw new Error(d.error);
-  if (!r.ok) throw new Error(`${p} → HTTP ${r.status}`);
-  return d;
+  const r = await fetch(p, { method: "POST", body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `${p} → ${r.status}`);
+  return j;
 }
-function toast(msg, ok) {
-  const t = document.createElement("div");
-  t.className = "toast" + (ok ? "" : " err");
-  t.textContent = msg;
-  $("toasts").appendChild(t);
-  setTimeout(() => t.remove(), 4500);
-}
-/* run fn with a "signing…" state on btn; errors → toast */
 async function signed(btn, fn) {
   const old = btn.textContent;
   btn.disabled = true; btn.textContent = "signing…";
-  try { await fn(); }
-  catch (e) { toast(e.message || String(e), false); }
-  finally { btn.disabled = false; btn.textContent = old; gateButtons(); }
+  try { await fn(); } catch (e) { toast(e.message, false); }
+  btn.disabled = false; btn.textContent = old;
+}
+function copyCmd(btn) {
+  navigator.clipboard.writeText(btn.parentElement.textContent.replace("⧉","").trim())
+    .then(() => toast("copied"));
 }
 function gateButtons() {
   document.querySelectorAll(".needs-key").forEach(b => {
-    b.disabled = !KEY;
-    b.title = KEY ? "" : "generate an identity key in the Access tab first";
+    b.disabled = !KEY || READONLY;
+    b.title = READONLY ? "read-only demo instance"
+      : KEY ? "" : "generate an identity key in the Access tab first";
   });
-}
-function needRepo() {
-  if (!REPO) throw new Error("no repository yet — mint genesis in the Access tab first");
-  return REPO;
+  $("hero-key-hint").style.display = KEY ? "none" : "";
 }
 
-/* ── keys: generate / persist / reimport; private key never leaves page ── */
+/* ── keys ─────────────────────────────────────────────────── */
 async function probeEd() {
-  try { await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign","verify"]);
+  try { await crypto.subtle.generateKey({name:"Ed25519"}, false, ["sign","verify"]);
     return true; } catch (_) { return false; }
 }
 async function loadKey() {
   const b64 = localStorage.getItem("weft-key");
   if (!b64) return;
   try {
-    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const priv = await crypto.subtle.importKey("pkcs8", bytes.buffer,
-      { name: "Ed25519" }, true, ["sign"]);
-    const jwk = await crypto.subtle.exportKey("jwk", priv); // jwk.x = public half
-    PUB = toHex(b64uToBytes(jwk.x));
+    const priv = await crypto.subtle.importKey("pkcs8",
+      Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer,
+      {name:"Ed25519"}, true, ["sign"]);
+    PUB = toHex(b64uToBytes((await crypto.subtle.exportKey("jwk", priv)).x));
     KEY = priv;
   } catch (e) { toast("stored key unusable: " + e.message, false); }
 }
 async function genKey(btn) {
   if (!EDOK) { toast("Ed25519 unsupported in this browser", false); return; }
-  if (KEY && !confirm("Replace the existing key? The old private key cannot be recovered and everything delegated to it will dangle.")) return;
-  try {
-    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign","verify"]);
-    PUB = toHex(new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)));
-    const p8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", kp.privateKey));
-    localStorage.setItem("weft-key", btoa(String.fromCharCode(...p8)));
-    KEY = kp.privateKey;
-    toast("key generated — pub " + short(PUB, 12), true);
-    renderIdentity(); gateButtons();
-  } catch (e) { toast("keygen failed: " + e.message, false); }
+  if (KEY && !confirm("Replace the existing key? Everything delegated to it will dangle.")) return;
+  const kp = await crypto.subtle.generateKey({name:"Ed25519"}, true, ["sign","verify"]);
+  PUB = toHex(new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)));
+  localStorage.setItem("weft-key", btoa(String.fromCharCode(
+    ...new Uint8Array(await crypto.subtle.exportKey("pkcs8", kp.privateKey)))));
+  KEY = kp.privateKey;
+  toast("key generated — " + short(PUB, 12));
+  renderHeader(); renderIdentity(); gateButtons();
 }
 
-/* ── key → name resolution from published identity objects ─────── */
-let NAMES = {};
-async function syncNames() {
-  try {
-    const d = await jget("/identities");
-    NAMES = {};
-    (d.identities || []).forEach(i => { if (i.name) NAMES[i.pub] = i.name; });
-  } catch (_) {}
-}
-const who = (k, n = 12) =>
-  NAMES[k] ? `${esc(NAMES[k])} <span class="oid">(${short(k, 8)})</span>` : short(k, n);
-
-/* ── generic mint: prepare → sign → submit (same ts both calls) ── */
+/* ── publish: prepare → sign → submit ─────────────────────── */
 async function publish(type, body, repoHex) {
   if (!EDOK) throw new Error("Ed25519 unsupported — signing disabled");
-  if (!KEY) throw new Error("no signing key — generate one in the Access tab");
-  const ts = Date.now();
-  const env = { repo: repoHex ? "hex:" + repoHex : null, type, ts,
+  if (!KEY) throw new Error("no signing key — generate one in Access");
+  const env = { repo: repoHex ? "hex:" + repoHex : null, type, ts: Date.now(),
     author: "hex:" + PUB, auth: null, body };
   const prep = await jpost("/prepare", env);
-  const sig = new Uint8Array(await crypto.subtle.sign("Ed25519", KEY, fromHex(hx(prep.payload))));
-  const res = await jpost("/submit", Object.assign({}, env, { sig: "hex:" + toHex(sig) }));
-  return res.oid;
+  const sig = new Uint8Array(await crypto.subtle.sign("Ed25519", KEY,
+    fromHex(hx(prep.payload))));
+  return (await jpost("/submit", Object.assign({}, env, {sig: "hex:" + toHex(sig)}))).oid;
+}
+function needRepo() {
+  if (!REPO) throw new Error("no repository yet");
+  return REPO;
 }
 
-/* ── tabs ──────────────────────────────────────────────────────── */
-const LOADERS = { overview: loadOverview, intents: loadIntents,
-  files: loadFiles, access: loadAccess, policy: loadPolicy };
+/* ── shared state ─────────────────────────────────────────── */
+async function syncPolicy() {
+  const p = await jget("/policy");
+  REPO = p.repo; GATE = p.gate; READONLY = !!p.readonly;
+  return p;
+}
+async function syncNames() {
+  try {
+    NAMES = {};
+    (await jget("/identities")).identities.forEach(i => { if (i.name) NAMES[i.pub] = i.name; });
+  } catch (_) {}
+}
+const who = (k, n = 12) => NAMES[k]
+  ? `${esc(NAMES[k])} <span class="oid">${short(k, 8)}</span>` : short(k, n);
+const modelChip = m => {
+  if (!m || m === "none" || m === "human") return `<span class="chip">human</span>`;
+  const cls = m.startsWith("claude") ? "model-claude" : m.startsWith("gpt")
+    ? "model-gpt" : m.startsWith("qwen") ? "model-qwen" : "";
+  return `<span class="chip ${cls}">${esc(m)}</span>`;
+};
+
+function renderHeader() {
+  $("h-repo").textContent = REPO ? "repo " + REPO.slice(0, 12) + "…" : "no repository";
+  $("h-ro").style.display = READONLY ? "" : "none";
+  $("h-id").innerHTML = KEY ? `<span class="k">${short(PUB, 10)}</span>`
+    : "no key";
+  $("f-note").textContent = READONLY
+    ? "read-only public demo — state rebuilt by the real gate at boot" : "";
+}
+
+/* ── tabs ─────────────────────────────────────────────────── */
+const LOADERS = { overview: loadOverview, intents: loadIntents, files: loadFiles,
+                  access: loadAccess, policy: loadPolicy, bridge: loadBridge };
 function show(tab) {
   TAB = tab;
-  document.querySelectorAll("nav .tab").forEach(b =>
-    b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll(".nav").forEach(b =>
+    b.classList.toggle("active", b.dataset.t === tab));
   document.querySelectorAll(".tabpane").forEach(p =>
-    p.style.display = p.id === "tab-" + tab ? "" : "none");
-  LOADERS[tab]().catch(e => toast(e.message, false));
+    p.style.display = "none");
+  ($("tab-" + tab) || $("tab-overview")).style.display = "";
+  (LOADERS[tab] || (async () => {}))().catch(e => toast(e.message, false));
+}
+function maybeHero() {
+  if (!REPO && !READONLY) {
+    document.querySelectorAll(".tabpane").forEach(p => p.style.display = "none");
+    $("tab-hero").style.display = "";
+    return true;
+  }
+  return false;
 }
 
-/* ── shared renders ────────────────────────────────────────────── */
-const modelChip = m => `<span class="model ${m === "none" ? "human" : ""}">${
-  esc(m === "none" ? "human/authority" : m)}</span>`;
-const chgRow = (c, click) => `<div class="chg${click ? "" : " flat"}"${
-  click ? ` onclick="prov('${hx(c.oid)}')"` : ""}><span class="oid">chg_${
-  short(c.oid)}</span> ${modelChip(c.model)} “${esc(c.message)}”</div>`;
-
-/* ── OVERVIEW ──────────────────────────────────────────────────── */
+/* ── overview ─────────────────────────────────────────────── */
 async function loadOverview() {
+  await syncPolicy(); renderHeader();
+  if (maybeHero()) return;
+  $("tab-hero").style.display = "none"; $("tab-overview").style.display = "";
   const [heads, log, pending] = await Promise.all(
     [jget("/heads"), jget("/log"), jget("/pending")]);
-  $("conn").classList.remove("bad");
-  $("st-seq").textContent = heads.seq;
-  $("st-queued").textContent = log.queued;
+  $("h-conn").classList.remove("bad");
+  const landed = log.log.reduce((n, e) => n + e.changes.length, 0);
+  $("h-seq").textContent = heads.seq; $("h-queued").textContent = log.queued;
+  $("h-pending").textContent = (pending.pending || []).length;
+  $("tiles").innerHTML = [
+    ["trunk seq", heads.seq, "amber"], ["landings", log.log.length, ""],
+    ["changes landed", landed, ""], ["queued", log.queued, ""],
+    ["rejections", (log.rejects || []).length, ""]]
+    .map(([l, v, c]) => `<div class="tile ${c}"><b>${v}</b><span>${l}</span></div>`).join("");
   renderPending(pending.pending || []);
   renderLog(log);
 }
 function renderPending(list) {
-  $("pending-sec").style.display = list.length ? "" : "none";
-  if (!list.length) return;
+  $("pending-panel").style.display = list.length ? "" : "none";
   $("pending").innerHTML = list.map(p => `
-    <div class="pend">
-      <div><span class="oid">mfst_${short(p.manifest, 12)}</span>
-        <span class="chip amber">approvals ${p.have | 0}/${p.need | 0}</span>
-        <button class="btn small"${KEY ? "" :
-          ' disabled title="generate an identity key in the Access tab first"'
-        } onclick="approvePending(this,'${hx(p.manifest)}')">Approve &amp; sign</button></div>
+    <div class="landing">
+      <div class="l-head"><span class="oid">mfst_${short(p.manifest, 12)}</span>
+        <span class="chip amber">approvals ${p.have|0}/${p.need|0}</span>
+        <button class="btn sm needs-key" onclick="approvePending(this,'${hx(p.manifest)}')">Approve &amp; sign</button></div>
       ${(p.changes || []).map(c => chgRow(c, false)).join("")}
     </div>`).join("");
+  gateButtons();
+}
+const chgRow = (c, click = true) => `
+  <div class="chg${click ? "" : " flat"}"${click ? ` onclick="prov('${hx(c.oid)}')"` : ""}>
+    <span class="oid">chg_${short(c.oid)}</span>${modelChip(c.model)}
+    <span class="msg">${esc(c.message)}</span></div>`;
+function renderLog(log) {
+  $("log-count").textContent = log.log.length + " landings";
+  if (!log.log.length) {
+    $("log").innerHTML = `<div class="empty">no landings yet</div>`;
+  } else {
+    $("log").innerHTML = log.log.slice().reverse().map(e => `
+      <div class="landing">
+        <div class="l-head"><span class="seq">seq ${e.seq}</span>
+          <span class="oid">lnd_${short(e.landing)}</span>
+          ${e.markers ? `<span class="chip">⇢ ${e.markers} order marker${e.markers>1?"s":""}</span>` : ""}</div>
+        ${e.changes.map(c => chgRow(c)).join("")}
+        ${(e.warnings || []).map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join("")}
+      </div>`).join("");
+  }
+  const rejects = log.rejects || [];
+  $("rejects-panel").style.display = rejects.length ? "" : "none";
+  $("rejects").innerHTML = rejects.slice().reverse().map(r => `
+    <div class="card"><span class="chip bad">refused</span>
+      <span style="font-size:.82rem">${esc((r.errors || []).join("; "))}</span>
+      ${r.proposal ? `<span class="oid">prp_${short(r.proposal)}</span>` : ""}</div>`).join("");
 }
 async function approvePending(btn, manifest) {
   await signed(btn, async () => {
-    const oid = await publish("evidence", {
-      manifest: "hex:" + manifest,
-      recipe: { kind: "approval" },
-      results: [{ status: "pass" }],
-    }, needRepo());
-    toast("approval evidence signed → evd_" + short(oid), true);
+    await publish("evidence", { manifest: "hex:" + manifest,
+      recipe: {kind: "approval"}, results: [{status: "pass"}] }, needRepo());
+    toast("approval signed");
     loadOverview().catch(() => {});
   });
 }
-function renderLog(log) {
-  const el = $("log");
-  if (!log.log.length) { el.className = "empty"; el.textContent = "no landings yet"; }
-  else {
-    el.className = "";
-    el.innerHTML = log.log.slice().reverse().map(e => `
-      <div class="landing">
-        <div><span class="seq">seq ${e.seq | 0}</span>
-          <span class="oid">lnd_${short(e.landing)}</span>
-          ${e.markers ? `· ${e.markers | 0} order marker(s)` : ""}</div>
-        ${e.changes.map(c => chgRow(c, true)).join("")}
-        ${e.warnings.map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join("")}
-      </div>`).join("");
-  }
-  const rj = $("rejects");
-  if (!log.rejects.length) { rj.className = "empty"; rj.textContent = "none"; }
-  else {
-    rj.className = "";
-    rj.innerHTML = log.rejects.map(r =>
-      `<div class="warn">${esc(JSON.stringify(r))}</div>`).join("");
-  }
-}
 async function prov(oid) {
+  $("drawer").classList.add("open");
   try {
     const p = await jget("/provenance/" + hx(oid));
-    $("prov-target").textContent = "chg_" + short(oid);
-    const pv = $("prov");
-    pv.className = "";
-    pv.innerHTML = `
-      <div>${modelChip(p.model)} · key <span class="oid">${short(p.author, 12)}</span></div>
-      <div>“${esc(p.message)}”</div>
-      <div class="oid">footprint ${esc((p.footprint || []).join(", ") || "–")}</div>
-      ${(p.chain || []).map(c => `
+    $("prov").innerHTML = `
+      <div class="kv"><dt>change</dt><dd>chg_${short(p.oid, 14)}</dd>
+        <dt>model</dt><dd>${esc(p.model)}</dd>
+        <dt>author key</dt><dd>${short(p.author, 16)}</dd>
+        <dt>footprint</dt><dd>${esc((p.footprint||[]).join(", "))}</dd></div>
+      <div style="margin-top:.9rem">${(p.chain || []).map(c => `
         <div class="cap ${c.root ? "root" : ""}">
-          <div class="who">cap_${short(c.oid)} ${c.root
-            ? '<span class="badge">AUTHORITY ROOT</span>' : ""}</div>
-          <div class="scope">issuer ${who(c.issuer)} →
-            audience ${who(c.audience)}</div>
-          <div class="scope">actions ${esc((c.actions || []).join(", "))} ·
-            paths ${esc((c.paths || []).join(", "))}</div>
-        </div>`).join("")}`;
-  } catch (e) { toast(e.message, false); }
+          <div class="who">cap_${short(c.oid)} ${c.root ? '<span class="badge-root">AUTHORITY ROOT</span>' : ""}</div>
+          <div class="scope">${who(c.issuer)} → ${who(c.audience)}</div>
+          <div class="scope">${esc((c.actions||[]).join(", "))} · ${esc((c.paths||[]).join(", "))}</div>
+        </div>`).join("")}</div>`;
+  } catch (e) { $("prov").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
-/* ── INTENTS ───────────────────────────────────────────────────── */
+/* ── intents ──────────────────────────────────────────────── */
 async function loadIntents() {
+  if (maybeHero()) return;
+  await syncNames();
   const d = await jget("/intents");
-  const el = $("intents");
-  if (!d.intents.length) { el.className = "empty"; el.textContent = "none yet"; return; }
-  el.className = "";
-  el.innerHTML = d.intents.map(i => `
+  $("intents").innerHTML = d.intents.length ? d.intents.map(i => `
     <div class="card">
-      <div><span class="chip ${i.closed ? "" : "ok"}">${i.closed ? "closed" : "open"}</span>
-        <b>${esc(i.title)}</b> <span class="oid">int_${short(i.oid)}</span></div>
-      <div class="dim" style="font-size:.9em">${esc(i.goal)}</div>
-      ${(i.criteria || []).map(c => `<div class="dim" style="font-size:.85em;padding-left:1em">· ${esc(c)}</div>`).join("")}
-      <div class="oid" style="font-size:.8em">ref ${esc(i.ref)} · author ${short(i.author, 12)}</div>
-    </div>`).join("");
+      <div><span class="chip ${i.closed ? "ok" : "amber"}">${i.closed ? "closed" : "open"}</span>
+        <b style="font-size:.92rem"> ${esc(i.title)}</b>
+        <span class="oid">int_${short(i.oid)}</span></div>
+      <div style="color:var(--dim);font-size:.84rem;margin:.2rem 0">${esc(i.goal)}</div>
+      ${(i.criteria || []).map(c => `<div style="font-size:.8rem">☐ ${esc(c)}</div>`).join("")}
+      <div class="oid" style="margin-top:.2rem">by ${who(i.author)}</div>
+    </div>`).join("") : `<div class="empty">none yet</div>`;
+  gateButtons();
 }
 async function createIntent(btn) {
-  const title = $("in-title").value.trim();
-  const goal = $("in-goal").value.trim();
-  const criteria = $("in-criteria").value.split("\n").map(s => s.trim()).filter(Boolean);
-  if (!title) { toast("intent needs a title", false); return; }
   await signed(btn, async () => {
-    const oid = await publish("intent", {
-      ref: "trunk", title, goal, constraints: [],
-      criteria: criteria.map(desc => ({ desc })), priority: 0.5,
-    }, needRepo());
-    toast("intent published → int_" + short(oid), true);
-    $("in-title").value = ""; $("in-goal").value = ""; $("in-criteria").value = "";
+    const criteria = $("int-criteria").value.split("\n").map(s => s.trim())
+      .filter(Boolean).map(desc => ({desc}));
+    const oid = await publish("intent", { ref: "trunk",
+      title: $("int-title").value.trim() || "untitled",
+      goal: $("int-goal").value.trim(), constraints: [], criteria,
+      priority: 50 }, needRepo());
+    toast("intent int_" + short(oid));
     loadIntents().catch(() => {});
   });
 }
 
-/* ── FILES ─────────────────────────────────────────────────────── */
+/* ── files ────────────────────────────────────────────────── */
+let WS = null, SEL = null;
 async function loadFiles() {
-  const ws = await jget("/workspace");
-  $("files-seq").textContent = ws.seq;
-  FILELIST = Object.entries(ws.files || {});
-  const el = $("filelist");
-  if (!FILELIST.length) { el.className = "empty"; el.textContent = "no files at head"; return; }
-  el.className = "";
-  el.innerHTML = FILELIST.map(([path, f], i) => `
-    <div class="filelink" id="fl-${i}" onclick="viewFile(${i})">${esc(path)}
-      <span class="oid">· ${f.line_ids.length} line(s)</span></div>`).join("");
+  if (maybeHero()) return;
+  WS = await jget("/workspace");
+  $("ws-seq").textContent = WS.seq;
+  const names = Object.keys(WS.files);
+  $("filelist").innerHTML = names.length ? names.map(p => `
+    <div class="filelink ${SEL === p ? "sel" : ""}" onclick="pick('${esc(p)}')">
+      <span>${esc(p)}</span><span class="oid">${WS.files[p].line_ids.length}</span>
+    </div>`).join("") : `<div class="empty">empty workspace</div>`;
+  if (SEL && WS.files[SEL]) pick(SEL);
 }
-function viewFile(i) {
-  const entry = FILELIST[i];
-  if (!entry) return;
-  const [path, f] = entry;
-  document.querySelectorAll(".filelink").forEach(el => el.classList.remove("sel"));
-  const link = $("fl-" + i); if (link) link.classList.add("sel");
-  $("file-name").textContent = path;
-  const fv = $("fileview");
-  fv.className = "";
-  fv.innerHTML = `
-    <div class="oid" style="font-size:.85em">${f.line_ids.length} line(s) ·
-      digest ${short(f.digest, 14)} · fid ${short(f.fid && f.fid[0], 10)}#${
-      esc(f.fid ? f.fid[1] : "?")}</div>
-    <pre class="file">${esc(f.content)}</pre>`;
+function pick(path) {
+  SEL = path;
+  document.querySelectorAll(".filelink").forEach(el =>
+    el.classList.toggle("sel", el.textContent.trim().startsWith(path)));
+  const f = WS.files[path];
+  $("file-title").textContent = path;
+  const badge = $("file-badge");
+  badge.style.display = "";
+  if (f.instruction) {
+    badge.className = "chip ok"; badge.textContent = "instructions · trusted chain";
+  } else {
+    badge.className = "chip bad"; badge.textContent = "data · not instructions";
+  }
+  const lines = f.content.split("\n");
+  if (lines[lines.length-1] === "") lines.pop();
+  $("fileview").innerHTML =
+    (f.instruction ? "" : `<div class="data-banner">⚠ authors lack the
+      <span class="mono">instruct</span> capability — agents treat this
+      content as untrusted data (RFC §12.1)</div>`) +
+    `<pre class="code">${lines.map((l, i) =>
+      `<span class="ln">${i+1}</span>${esc(l)}`).join("\n")}</pre>`;
 }
 
-/* ── ACCESS ────────────────────────────────────────────────────── */
-async function loadAccess() {
-  await syncPolicy();
-  await syncNames();
-  $("repo-create").style.display = REPO ? "none" : "";
-  renderIdentity();
-  renderRoleActions();
-  const el = $("caps");
-  if (!REPO) { el.className = "empty"; el.textContent = "no repository — no capability graph yet"; return; }
-  const d = await jget("/caps");
-  if (!d.caps.length) { el.className = "empty"; el.textContent = "none"; return; }
-  el.className = "";
-  el.innerHTML = d.caps.map(c => `
-    <div class="cap card ${c.revoked ? "revoked" : ""}">
-      <div class="who">cap_${short(c.oid)}
-        ${c.revoked ? '<span class="chip bad">REVOKED</span>'
-          : `<span class="oid" data-exp="${+c.exp || 0}">${fmtExp(c.exp)}</span>
-             ${KEY ? `<button class="btn small" onclick="revokeCap(this,'${hx(c.oid)}')">Revoke</button>` : ""}`}</div>
-      <div class="scope">issuer ${who(c.issuer)} → audience ${who(c.audience)}</div>
-      <div class="scope">actions ${esc((c.actions || []).join(", "))} ·
-        paths ${esc((c.paths || []).join(", "))}</div>
-      <div class="scope">${c.parent ? "parent cap_" + short(c.parent) : "direct issue (no parent)"}</div>
-    </div>`).join("");
-}
-function renderIdentity() {
-  $("ident").innerHTML = KEY ? `
-    <div class="oid" style="font-size:.8em">public key — share this; the private half never leaves the page</div>
-    <div class="keyhex">${esc(PUB)}</div>
-    <div class="row">
-      <label class="f">display name<input id="id-name" size="20" placeholder="e.g. pranab"></label>
-      <button class="btn needs-key" onclick="publishIdentity(this)">Publish identity</button>
-      <button class="btn" onclick="genKey(this)">Rotate key</button>
-    </div>
-    <div class="danger">⚠ DANGER — this key lives only in this browser's localStorage.
-      Clearing site data destroys it; anyone using this profile can sign as you.</div>`
-  : `
-    <div class="empty">no signing key in this browser</div>
-    <div class="row"><button class="btn" onclick="genKey(this)"${EDOK ? "" :
-      ' disabled title="Ed25519 unsupported in this browser"'}>Generate Ed25519 key</button></div>
-    <div class="danger">⚠ the key is minted and stored in this browser only —
-      it is your entire identity on the wire</div>`;
-}
-async function publishIdentity(btn) {
-  const name = $("id-name").value.trim();
-  if (!name) { toast("identity needs a name", false); return; }
-  await signed(btn, async () => {
-    const oid = await publish("identity", { kind: "human", name }, needRepo());
-    toast("identity published → idn_" + short(oid), true);
-    await syncNames();
-    loadAccess().catch(() => {});
-  });
-}
-function renderRoleActions() {
-  if ($("role-actions").children.length) return;
-  $("role-actions").innerHTML = ACTIONS.map(a =>
-    `<label style="font-size:.8em;color:var(--dim);margin-right:.8rem">
-      <input type="checkbox" id="act-${a}"> ${a}</label>`).join("");
-}
+/* ── access ───────────────────────────────────────────────── */
+const ACTIONS = ["publish_change","propose","approve","delegate","create_intent","policy","read","instruct"];
+const ROLES = {
+  maintainer: { actions: ["publish_change","propose","approve","delegate","create_intent","policy"], paths: ["**"] },
+  contributor:{ actions: ["publish_change","propose"], paths: null },
+  reader:     { actions: ["read"], paths: ["**"] },
+};
 function roleChanged() {
   const r = $("role-sel").value;
   $("role-paths-row").style.display = (r === "contributor" || r === "custom") ? "" : "none";
   $("role-actions-row").style.display = r === "custom" ? "" : "none";
 }
+async function loadAccess() {
+  await syncPolicy(); await syncNames(); renderHeader(); renderIdentity();
+  $("role-actions").innerHTML = ACTIONS.map(a =>
+    `<label style="font-size:.78rem;margin-right:.9rem">
+      <input type="checkbox" id="act-${a}"> ${a}</label>`).join("");
+  const el = $("caps");
+  if (!REPO) { el.innerHTML = `<div class="empty">no repository — no capability graph yet</div>`; gateButtons(); return; }
+  const d = await jget("/caps");
+  el.innerHTML = d.caps.length ? d.caps.map(c => `
+    <div class="card ${c.revoked ? "revoked" : ""}">
+      <div class="who">cap_${short(c.oid)}
+        ${c.revoked ? '<span class="chip bad">revoked</span>'
+          : `<span class="oid" data-exp="${+c.exp||0}">${fmtExp(c.exp)}</span>
+             ${KEY && !READONLY ? `<button class="btn ghost sm" onclick="revokeCap(this,'${hx(c.oid)}')">Revoke</button>` : ""}`}</div>
+      <div class="scope" style="color:var(--dim);font-size:.8rem">${who(c.issuer)} → ${who(c.audience)}</div>
+      <div class="scope" style="color:var(--dim);font-size:.8rem">
+        ${esc((c.actions||[]).join(", "))} · <span class="mono">${esc((c.paths||[]).join(", "))}</span>
+        ${c.parent ? `· parent cap_${short(c.parent)}` : "· direct issue"}</div>
+    </div>`).join("") : `<div class="empty">none</div>`;
+  gateButtons();
+}
+function fmtExp(ms) {
+  const d = ms - Date.now();
+  if (d <= 0) return "expired";
+  if (d > 86400000) return "expires in " + Math.round(d/86400000) + "d";
+  if (d > 3600000) return "expires in " + Math.round(d/3600000) + "h";
+  return "expires in " + Math.max(1, Math.round(d/60000)) + "m";
+}
+function renderIdentity() {
+  $("ident").innerHTML = KEY ? `
+    <div style="font-size:.76rem;color:var(--faint)">public key — share this;
+      the private half never leaves this page</div>
+    <div class="keyhex">${esc(PUB)}</div>
+    <div class="row">
+      <label class="f">display name<input id="id-name" size="18" placeholder="e.g. pranab"></label>
+      <button class="btn needs-key" onclick="publishIdentity(this)">Publish identity</button>
+      <button class="btn ghost" onclick="genKey(this)">Rotate key</button>
+    </div>
+    <div class="danger">⚠ the key lives only in this browser's localStorage —
+      clearing site data destroys it.</div>`
+  : `
+    <div class="empty">no signing key in this browser</div>
+    <div class="row"><button class="btn" onclick="genKey(this)"${EDOK ? "" : " disabled"}>Generate Ed25519 key</button></div>`;
+}
+async function publishIdentity(btn) {
+  const name = $("id-name").value.trim();
+  if (!name) { toast("identity needs a name", false); return; }
+  await signed(btn, async () => {
+    await publish("identity", {kind: "human", name}, needRepo());
+    toast("identity published");
+    await syncNames(); loadAccess().catch(() => {});
+  });
+}
 async function mintCap(btn) {
-  const role = $("role-sel").value;
   const aud = hx($("role-aud").value);
-  if (aud.length !== 64) { toast("audience must be a 64-hex-char Ed25519 public key", false); return; }
+  if (aud.length !== 64) { toast("audience must be a 64-hex Ed25519 public key", false); return; }
+  const role = $("role-sel").value;
   let actions, paths;
   if (role === "custom") {
-    actions = ACTIONS.filter(a => $("act-" + a).checked);
+    actions = ACTIONS.filter(a => $("act-"+a).checked);
     paths = $("role-paths").value.split(",").map(s => s.trim()).filter(Boolean);
-    if (!actions.length) { toast("pick at least one action", false); return; }
-    if (!paths.length) { toast("give at least one path glob", false); return; }
+    if (!actions.length || !paths.length) { toast("custom role needs actions + paths", false); return; }
   } else {
     actions = ROLES[role].actions;
     paths = ROLES[role].paths ||
@@ -598,101 +804,100 @@ async function mintCap(btn) {
     if (!paths.length) paths = ["src/**"];
   }
   await signed(btn, async () => {
-    const oid = await publish("capability", {
-      audience: "hex:" + aud, parent: null,
-      scope: { actions, paths },
+    const oid = await publish("capability", { audience: "hex:" + aud,
+      parent: null, scope: {actions, paths},
       exp: Date.now() + (+$("role-exp").value),
-      meta: { reason: role },
-    }, needRepo());
-    toast(role + " capability minted → cap_" + short(oid), true);
+      meta: {reason: role[0].toUpperCase() + role.slice(1)} }, needRepo());
+    toast("capability cap_" + short(oid));
     loadAccess().catch(() => {});
   });
 }
-async function revokeCap(btn, capOid) {
-  const reason = prompt("Reason for revocation (recorded in the signed object):");
-  if (reason === null) return;
+async function revokeCap(btn, target) {
   await signed(btn, async () => {
-    const oid = await publish("revocation",
-      { target: "hex:" + capOid, reason: reason || "revoked via governance console" },
-      needRepo());
-    toast("revocation signed → rvk_" + short(oid), true);
+    await publish("revocation", { target: "hex:" + target,
+      reason: "revoked from console" }, needRepo());
+    toast("revoked");
     loadAccess().catch(() => {});
   });
 }
 async function createRepo(btn) {
-  const name = $("repo-name").value.trim() || "weft-repo";
   await signed(btn, async () => {
-    if (!GATE) GATE = (await jget("/gatekey")).pub;
     const oid = await publish("genesis", {
-      name,
-      authority: ["hex:" + PUB],
-      quorum: 1,
-      refs: { trunk: { gates: ["hex:" + hx(GATE)], threshold: 1 } },
-      policy_init: { rules: [], recipes: [], approvals: 1, stale_reads: "warn" },
-      config_init: {},
-    }, null);
-    toast("repository " + name + " created → rep_" + short(oid) +
-      " — this browser key is now the authority root", true);
-    await syncPolicy();
-    loadAccess().catch(() => {});
+      name: $("repo-name").value.trim() || "weft-repo",
+      authority: ["hex:" + PUB], quorum: 1,
+      refs: {trunk: {gates: ["hex:" + GATE], threshold: 1}},
+      policy_init: {rules: [], recipes: [], approvals: 1, stale_reads: "warn"},
+      config_init: {} }, null);
+    toast("repository created — you are the authority root");
+    REPO = hx(oid);
+    renderHeader(); show("overview");
   });
 }
-function fmtExp(exp) {
-  const d = (+exp || 0) - Date.now();
-  if (d <= 0) return "expired";
-  const s = Math.floor(d / 1000), m = Math.floor(s / 60),
-        h = Math.floor(m / 60), dy = Math.floor(h / 24);
-  if (dy > 0) return `expires in ${dy}d ${h % 24}h`;
-  if (h > 0) return `expires in ${h}h ${m % 60}m`;
-  if (m > 0) return `expires in ${m}m ${s % 60}s`;
-  return `expires in ${s}s`;
-}
 
-/* ── POLICY ────────────────────────────────────────────────────── */
+/* ── policy ───────────────────────────────────────────────── */
 async function loadPolicy() {
-  const p = await jget("/policy");
-  const el = $("policy");
-  el.className = "";
-  el.innerHTML = `
-    <div>repo <span class="oid">${p.repo ? esc(p.repo) : "— none (mint genesis in Access)"}</span></div>
-    <div style="margin-top:.4rem">gate key</div>
-    <div class="keyhex">${esc(p.gate)}</div>
-    <div style="margin-top:.4rem">authority key(s)</div>
-    ${(p.authority || []).map(a => `<div class="keyhex">${esc(a)}</div>`).join("")
-      || '<div class="empty">none</div>'}
-    <div style="margin-top:.6rem">active policy</div>
-    <pre class="file">${esc(JSON.stringify(p.policy, null, 2))}</pre>`;
+  if (maybeHero()) return;
+  const p = await syncPolicy();
+  $("policy").innerHTML = `
+    <div class="kv">
+      <dt>repository</dt><dd>${p.repo ? esc(p.repo) : "—"}</dd>
+      <dt>gate key</dt><dd>${esc(p.gate)}</dd>
+      <dt>authority</dt><dd>${(p.authority||[]).map(k => who(k, 16)).join("<br>")}</dd>
+      <dt>mode</dt><dd>${p.readonly ? "read-only demo" : "writable"}</dd>
+    </div>
+    <div style="margin-top:.8rem;font-size:.72rem;color:var(--faint);letter-spacing:.1em;text-transform:uppercase">policy body</div>
+    <pre class="code" style="padding:.7rem .9rem">${esc(JSON.stringify(p.policy, null, 2))}</pre>`;
 }
 
-/* ── header / shared state ─────────────────────────────────────── */
-async function syncPolicy() {
+/* ── bridge ───────────────────────────────────────────────── */
+async function loadBridge() {
+  if (maybeHero()) return;
+  await syncPolicy();
+  let base = null;
   try {
-    const p = await jget("/policy");
-    REPO = p.repo || null;
-    if (p.gate) GATE = p.gate;
-    $("st-repo").textContent = REPO ? short(REPO) : "no repo";
-    $("st-gate").textContent = GATE ? short(GATE) : "–";
+    base = (await jget("/notes")).notes.map(n => n.text)
+      .find(t => t.startsWith("git-import "));
   } catch (_) {}
+  const log = await jget("/log");
+  const landedAfter = log.log.reduce((n, e) =>
+    n + e.changes.filter(c => !String(c.message).startsWith("git-import")).length, 0);
+  $("bridge-exportable").textContent = landedAfter;
+  if (base) {
+    const sha = base.split(" ")[1] || "";
+    $("bridge-state").textContent = "bridged";
+    $("bridge-state").className = "chip ok";
+    $("bridge-info").innerHTML = `
+      <div class="kv">
+        <dt>base git commit</dt><dd>${esc(sha)}</dd>
+        <dt>landed since import</dt><dd>${landedAfter} change(s) ready to export</dd>
+        <dt>export branch</dt><dd>weft-export (rebuilt deterministically each run)</dd>
+      </div>`;
+  } else {
+    $("bridge-state").textContent = REPO ? "native repo (no git upstream)" : "no repository";
+    $("bridge-state").className = "chip info";
+    $("bridge-info").innerHTML = `<div class="empty">this repository was not
+      imported from git — you can still export its history to a fresh git
+      repo, or bridge a different checkout below</div>`;
+  }
 }
 
-/* ── boot ──────────────────────────────────────────────────────── */
+/* ── boot ─────────────────────────────────────────────────── */
 (async function boot() {
   EDOK = await probeEd();
   if (!EDOK) $("edbanner").style.display = "";
   else await loadKey();
-  try { GATE = (await jget("/gatekey")).pub; } catch (_) {}
-  await syncPolicy();
-  await syncNames();
-  gateButtons();
+  try { GATE = (await jget("/gatekey")).pub; } catch (_) { $("h-conn").classList.add("bad"); }
+  await syncPolicy(); await syncNames();
+  renderHeader(); gateButtons();
   show("overview");
   setInterval(() => {
-    if (TAB === "overview")
-      loadOverview().catch(() => $("conn").classList.add("bad"));
-  }, 2000);
-  setInterval(() => {                              // live expiry countdowns
+    if (TAB === "overview" && REPO)
+      loadOverview().catch(() => $("h-conn").classList.add("bad"));
+  }, 2500);
+  setInterval(() => {
     document.querySelectorAll("[data-exp]").forEach(el =>
       el.textContent = fmtExp(+el.dataset.exp));
-  }, 1000);
+  }, 30000);
 })();
 </script>
 </body>

@@ -926,8 +926,8 @@ fn route(shared: &Shared, method: &str, url: &str, body: Vec<u8>)
             let policy = hub.policy.as_ref().map(|p| v_to_jv(p).to_string())
                 .unwrap_or("null".into());
             (200, format!(
-                "{{\"repo\":{repo},\"gate\":\"{}\",\"authority\":[{}],\"policy\":{policy}}}",
-                hex(&hub.gate_pub), authority.join(",")).into_bytes(), json)
+                "{{\"repo\":{repo},\"gate\":\"{}\",\"authority\":[{}],\"readonly\":{},\"policy\":{policy}}}",
+                hex(&hub.gate_pub), authority.join(","), hub.readonly).into_bytes(), json)
         }
         ("GET", "/notes") => {
             let items: Vec<String> = hub.store.env.iter().filter_map(|(oid, e)| {
