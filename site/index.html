@@ -83,6 +83,19 @@
   .term .r { color: var(--bad); }
   .term .a { color: var(--accent); }
 
+  .prob { background: var(--bg1); border: 1px solid var(--line);
+    border-left: 3px solid var(--bad); border-radius: 12px; padding: 1.3rem 1.5rem; }
+  .prob-lead { font-size: 1.05rem; margin-bottom: .8rem; text-wrap: balance; }
+  .prob p { color: var(--dim); }
+  .prob-lead strong, .prob strong { color: var(--text); }
+  .horns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.2rem 0 .8rem; }
+  @media (max-width: 760px) { .horns { grid-template-columns: 1fr; } }
+  .horn { background: var(--bg0); border: 1px solid var(--line); border-radius: 9px;
+    padding: .9rem 1.1rem; }
+  .horn h4 { font-size: .9rem; color: var(--bad); margin-bottom: .3rem; }
+  .horn p { font-size: .88rem; }
+  .prob-note { font-size: .9rem; font-style: italic; }
+
   .artifacts { display: flex; flex-direction: column; gap: 1.4rem; }
   .art { background: var(--bg1); border: 1px solid var(--line);
     border-radius: 12px; padding: 1rem 1.2rem 1.1rem; }
@@ -161,6 +174,7 @@
   <span class="brand">🧵 <span>weft</span></span>
   <span class="spacer"></span>
   <a href="https://demo.weftgate.com">Live demo</a>
+  <a href="#problem">Problem</a>
   <a href="#demos">Demos</a>
   <a href="#artifacts">Artifacts</a>
   <a href="#proof">Proof</a>
@@ -204,6 +218,65 @@
 </div>
 
 <div class="wrap">
+<section id="problem">
+  <h2>The problem</h2>
+  <div class="prob">
+    <p class="prob-lead">Software collaboration was built on one assumption:
+    <strong>a human reads every change before it becomes real.</strong>
+    Commits carry prose for a reader. Pull requests exist to chunk work into
+    human-sized pieces. Review is the gate.</p>
+    <p>Agents break that assumption by two orders of magnitude. A single agent
+    generates more reviewable change in an hour than a person carefully reads
+    in a day. Point five at one repository and you have already lost.</p>
+    <div class="horns">
+      <div class="horn">
+        <h4>Keep the human gate</h4>
+        <p>Your fleet runs at one person's reading speed. You bought
+        parallelism and throttled it to a single lane.</p>
+      </div>
+      <div class="horn">
+        <h4>Or drop it</h4>
+        <p>Skim, approve, merge. Now nothing checks anything, and unverified
+        generated work <em>is</em> the artifact.</p>
+      </div>
+    </div>
+    <p class="prob-note">Most teams are quietly sliding from the first to the
+    second, one “looks fine” at a time.</p>
+  </div>
+
+  <h2 style="margin-top:2.4rem">The insight</h2>
+  <p class="lead">Review was never the gate because humans are good at reading
+  diffs. It's the gate because <strong>something has to check before work
+  becomes real</strong> — and human attention was the only checker we had.</p>
+  <p class="lead">That stopped being true. Almost everything that matters
+  about a change is machine-checkable: does it compile, do the tests pass,
+  does the citation resolve, does the schema hold, did the agent reason
+  against current state, was it even authorized to touch that path.</p>
+
+  <h2 style="margin-top:2.4rem">What Weft does</h2>
+  <p class="lead"><strong>Weft replaces the human as the gate with evidence —
+  signed, and bound to the exact bytes.</strong> Work lands when it proves
+  itself. Humans move up a level: you decide <em>what must be true</em>, not
+  <em>whether these 400 lines are fine</em>.</p>
+  <div class="grid" style="margin-top:1.2rem">
+    <div class="card"><h3>N agents, one landing</h3><p>Disjoint work commutes,
+      so fifty agents produce one reviewable landing with one evidence run —
+      not fifty pull requests.</p></div>
+    <div class="card"><h3>Rejections carry reasons</h3><p>“citation [9] is not
+      in references.md”, not “LGTM?”. An agent can act on the first one
+      without a human in the loop.</p></div>
+    <div class="card"><h3>You can ask who did this</h3><p>Every line traces to
+      a model, a delegated capability, and a human authority key.</p></div>
+    <div class="card"><h3>Stale reasoning gets caught</h3><p>Even when the
+      diffs don't overlap — the failure git structurally cannot see.</p></div>
+    <div class="card"><h3>Permissions are real</h3><p>Scoped, expiring,
+      revocable capabilities instead of a shared bot token nobody audits.</p></div>
+    <div class="card"><h3>Nothing is lost</h3><p>One landing to reason about,
+      per-line accountability preserved — and it exports to git as ordinary
+      commits.</p></div>
+  </div>
+</section>
+
 <section>
   <h2>Built for the workflow git wasn't</h2>
   <p class="lead">Everything forges layered on git assumes human attention is

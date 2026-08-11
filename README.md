@@ -34,6 +34,42 @@ while the *weft* is woven across it, one pick at a time. The certified
 landing log is the warp; every agent's change is weft beaten into fabric by
 a verification gate. Swarms of threads, one cloth.
 
+## The problem
+
+Software collaboration was built on one assumption: **a human reads every
+change before it becomes real.** Commits carry prose for a reader. Pull
+requests exist to chunk work into human-sized pieces. Review is the gate.
+
+Agents break that assumption by two orders of magnitude. A single agent
+generates more reviewable change in an hour than a person carefully reads in
+a day. Point five at one repository and you have already lost.
+
+So teams pick one of two bad answers:
+
+- **Keep the human gate** — and your fleet runs at one person's reading speed.
+  You bought parallelism and throttled it to a single lane.
+- **Or drop it** — skim, approve, merge. Now nothing checks anything, and
+  unverified generated work *is* the artifact.
+
+Most teams are quietly sliding from the first to the second, one "looks fine"
+at a time.
+
+**The insight:** review was never the gate because humans are good at reading
+diffs. It's the gate because *something has to check before work becomes
+real* — and human attention was the only checker we had. That stopped being
+true. Almost everything that matters about a change is machine-checkable.
+
+**What Weft does:** it replaces the human as the gate with evidence — signed,
+and bound to the exact bytes. Work lands when it proves itself. Humans move up
+a level: you decide *what must be true*, not *whether these 400 lines are
+fine.*
+
+What changes: fifty agents produce one reviewable landing instead of fifty
+pull requests · rejections carry reasons an agent can act on, not opinions ·
+every line traces to a model, a capability, and a human authority key · stale
+reasoning is caught even when diffs don't overlap · permissions are scoped,
+expiring and revocable instead of a shared bot token.
+
 ## Why not just git + GitHub?
 
 Everything git and forges layered on top of it assumes **human attention is
