@@ -1,9 +1,3 @@
-# A real run of `--example paper`
-
-Verbatim output, four local models via Ollama (`gemma4:e4b`), nothing edited.
-Reproduce: `ollama serve && cargo run --release -p weftd --example paper`
-
-```text
 weft · four agents write a research paper
 
   topic     verification-gated merging for autonomous coding agents
@@ -110,4 +104,3 @@ citation-check: paper\findings.md: citation [9] is not in references.md
 
   landings: 3   rejections: 3
   try:  weft export --git ./paper   → conventional commits, provenance in trailers
-```

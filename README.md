@@ -123,7 +123,8 @@ bisection isolates it: three sections land, that one doesn't.
 Full walkthrough, including Hermes agent prompts and a traditional-vs-Weft
 comparison: [docs/multi-agent-research-paper.md](docs/multi-agent-research-paper.md).
 The verbatim output of a real run — including the prose the models produced and
-the refused section — is in [docs/sample-run.md](docs/sample-run.md).
+the refused section — is in [docs/runs/paper.txt](docs/runs/paper.txt), alongside
+[recorded runs](docs/runs/) of every demo, the full test suite, and the installer.
 
 ## For AI agents (MCP)
 

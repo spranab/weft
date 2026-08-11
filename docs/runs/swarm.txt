@@ -1,0 +1,16 @@
+# cargo run --release -p weftd --example swarm
+# 50 agents · 100 tasks · one repo · 2026-08-11T03:10Z
+
+weft swarm demo — 50 agents · 100 tasks · 1 repository · no branches · no PRs
+
+  ✓ 82 changes landed across 19 certified landings (22.0s wall)
+  ✓ largest batch: 51 independent changes in ONE landing (commutation)
+  ✓ 2 same-anchor races converged deterministically (order markers)
+  ✗ 8 stale-read changes rejected — reasoning was invalidated by concurrent work
+  ✗ 8 planted bugs rejected by evidence (16 batch bisections isolated them)
+  ✗ 3 revoked-credential attempts refused at certification
+
+  every landed line answers: which model, under whose authority, based on
+  what observations, proven by which evidence — try /provenance on any change
+
+  the same workload on git: 100 branches, 100 PRs, and a human week.

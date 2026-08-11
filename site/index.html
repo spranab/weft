@@ -90,6 +90,8 @@
     border-radius: 8px; padding: .7rem .9rem; }
   .rc span { font-size: .88rem; color: var(--text); }
   .rc a { font-size: .82rem; }
+  .rc a.src { color: var(--faint); font-size: .76rem; }
+  .rc a.src:hover { color: var(--dim); }
   .strip a { color: inherit; text-decoration: none; display: block; }
   .strip a:hover b { filter: brightness(1.25); }
   .strip a:hover span { color: var(--dim); }
@@ -429,7 +431,7 @@ function copyBlock(btn) {
     <span class="c">$ cargo run --release -p weftd --example paper</span>
   </div>
   <h3 class="plug-h" style="margin-top:1.6rem">What the models actually wrote — verbatim from that run
-  (<a href="https://github.com/spranab/weft/blob/main/docs/sample-run.md" style="text-transform:none;letter-spacing:0">full unedited output ↗</a>)</h3>
+  (<a href="https://github.com/spranab/weft/blob/main/docs/runs/paper.txt" style="text-transform:none;letter-spacing:0">full unedited output ↗</a>)</h3>
   <div class="plug-two">
     <div class="term" style="font-size:.76rem;line-height:1.6">
       <span class="c">┌─ paper/background.md   [gpt-5.6-sol]   </span><span class="g">LANDED</span><br>
@@ -646,37 +648,56 @@ function copyBlock(btn) {
 
 <section id="proof">
   <h2>Don't take our word for it</h2>
-  <p class="lead">Every claim on this page has a receipt. Here they are, one
-  click each.</p>
+  <p class="lead">Every claim on this page has a receipt — and you don't have
+  to run anything to see it. These are <strong>recorded runs</strong>:
+  unedited terminal output from real machines, with the source beside each
+  one if you'd rather reproduce it.</p>
   <div class="receipts">
     <div class="rc"><span>Fifty agents land concurrently; stale reads, planted
       bugs and revoked keys bounce</span>
-      <a href="https://github.com/spranab/weft/blob/main/weftd/examples/swarm.rs">swarm.rs — run it yourself ↗</a></div>
+      <a href="https://github.com/spranab/weft/blob/main/docs/runs/swarm.txt">recorded run ↗</a>
+      <a class="src" href="https://github.com/spranab/weft/blob/main/weftd/examples/swarm.rs">source</a></div>
     <div class="rc"><span>Four local models write a paper; the fabricated
-      citation is refused</span>
-      <a href="https://github.com/spranab/weft/blob/main/docs/sample-run.md">a full unedited run ↗</a></div>
-    <div class="rc"><span>Agents wrote real code that reached GitHub as normal
-      commits</span>
-      <a href="https://github.com/spranab/weft-demo/tree/weft-export">the woven branch, with provenance trailers ↗</a></div>
+      citation is refused while the rest land</span>
+      <a href="https://github.com/spranab/weft/blob/main/docs/runs/paper.txt">recorded run — with the prose they wrote ↗</a>
+      <a class="src" href="https://github.com/spranab/weft/blob/main/weftd/examples/paper.rs">source</a></div>
+    <div class="rc"><span>18 tests across 8 suites pass — determinism fuzzer,
+      replication, persistence, sandbox, bridge, MCP</span>
+      <a href="https://github.com/spranab/weft/blob/main/docs/runs/tests.txt">recorded run ↗</a>
+      <a class="src" href="https://github.com/spranab/weft/actions/workflows/ci.yml">CI, every commit</a></div>
+    <div class="rc"><span>One line installs it on a clean machine, and the hub
+      comes up sandboxed</span>
+      <a href="https://github.com/spranab/weft/blob/main/docs/runs/install.txt">recorded run ↗</a>
+      <a class="src" href="https://weftgate.com/install">the script</a></div>
+    <div class="rc"><span>The Hermes plugin drives a real gate: refusal →
+      delegation → landed → provenance to the authority root</span>
+      <a href="https://github.com/spranab/weft/blob/main/docs/runs/hermes-selftest.txt">recorded run ↗</a>
+      <a class="src" href="https://github.com/spranab/weft/blob/main/integrations/hermes-weft/selftest.py">source</a></div>
+    <div class="rc"><span>Agents' work reached GitHub as ordinary commits with
+      provenance trailers</span>
+      <a href="https://github.com/spranab/weft-demo/tree/weft-export">the woven branch itself ↗</a>
+      <a class="src" href="https://github.com/spranab/weft-demo/commits/weft-export">read the trailers</a></div>
+    <div class="rc"><span>A handbook: doc-linter gates it, a judge attests, an
+      unfinished section is refused anyway</span>
+      <a href="https://github.com/spranab/weft/blob/main/docs/runs/docs.txt">recorded run ↗</a>
+      <a class="src" href="https://github.com/spranab/weft/blob/main/weftd/examples/docs.rs">source</a></div>
+    <div class="rc"><span>Benchmarks: ingest, materialization, batched vs
+      contended landing</span>
+      <a href="https://github.com/spranab/weft/blob/main/docs/runs/bench.txt">recorded run ↗</a>
+      <a class="src" href="https://github.com/spranab/weft/blob/main/weftd/examples/bench.rs">source</a></div>
     <div class="rc"><span>The spec survived five kinds of adversary; every
       finding dispositioned in public</span>
-      <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md">the review log — 92 findings ↗</a></div>
-    <div class="rc"><span>A follower converges by verifying, and refuses forged
-      or equivocating landings</span>
-      <a href="https://github.com/spranab/weft/blob/main/weftd/tests/replicate.rs">replicate.rs — the adversarial cases ↗</a></div>
-    <div class="rc"><span>The hub survives crashes; evidence can't reach the
-      network</span>
-      <a href="https://github.com/spranab/weft/blob/main/weftd/tests/persist.rs">persist.rs — reboots, torn tails, sandbox ↗</a></div>
-    <div class="rc"><span>Determinism: any permutation of a change set yields
-      identical bytes</span>
-      <a href="https://github.com/spranab/weft/blob/main/weft-core/tests/protocol.rs">the fuzzer + regression suite ↗</a></div>
-    <div class="rc"><span>The Hermes plugin drives a real gate end to end</span>
-      <a href="https://github.com/spranab/weft/blob/main/integrations/hermes-weft/selftest.py">selftest.py — refusal → delegation → landed ↗</a></div>
-    <div class="rc"><span>Benchmarks are reproducible on your machine</span>
-      <a href="https://github.com/spranab/weft/blob/main/weftd/examples/bench.rs">bench.rs ↗</a></div>
-    <div class="rc"><span>It all builds and passes on Linux and Windows</span>
-      <a href="https://github.com/spranab/weft/actions/workflows/ci.yml">CI, every commit ↗</a></div>
+      <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md">the review log — 92 findings ↗</a>
+      <a class="src" href="https://github.com/spranab/weft/blob/main/rfcs/0001-weft-protocol.md">RFC-0001</a></div>
+    <div class="rc"><span>A follower refuses forged and equivocating landings;
+      the hub survives crashes</span>
+      <a href="https://github.com/spranab/weft/blob/main/docs/runs/tests.txt">in the recorded test run ↗</a>
+      <span><a class="src" href="https://github.com/spranab/weft/blob/main/weftd/tests/replicate.rs">replicate.rs</a>
+      <a class="src" href="https://github.com/spranab/weft/blob/main/weftd/tests/persist.rs">persist.rs</a></span></div>
   </div>
+  <p class="plug-note">Index of every recorded run, with notes on what they
+  deliberately show rather than hide:
+  <a href="https://github.com/spranab/weft/blob/main/docs/runs/">docs/runs ↗</a></p>
 </section>
 
 <section>

@@ -1,0 +1,13 @@
+# python integrations/hermes-weft/selftest.py
+# against a live weftd on :8747 · 2026-08-11T03:11Z
+
+weft_status      → repo f60d7481b1a3…  seq -1
+agent key        → 45835822addf16a4…
+weft_submit      → refused without a capability, and says which key to authorize ✓
+capability       → minted by the authority key ✓
+weft_submit      → landed seq 0
+weft_workspace   → numbered lines, instruction/data labelled ✓
+weft_provenance  → model=hermes chain reaches the authority root ✓
+on_session_end   → session note written to the repo's memory ✓
+
+all good — the Hermes plugin drives a real gate end to end.

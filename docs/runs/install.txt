@@ -1,0 +1,36 @@
+# curl -fsSL https://weftgate.com/install | sh
+# clean Ubuntu (WSL2) · 2026-08-11T03:11Z
+
+→ downloading weft v0.1.0 (x86_64-linux)
+
+✓ installed /home/yantrik/.weft/bin/{weftd,weft,weft-mcp}
+
+Add it to your PATH:
+  export PATH="/home/yantrik/.weft/bin:$PATH"
+  (append that to ~/.bashrc or ~/.zshrc to make it stick)
+
+Start a hub — console at http://localhost:8747:
+
+  weftd
+
+Give an agent the door (any MCP host — Hermes, OpenClaw, Claude Code, Codex):
+
+  { "mcpServers": { "weft": { "command": "/home/yantrik/.weft/bin/weft-mcp" } } }
+
+Bridge an existing GitHub repo, let agents land certified work, export it back:
+
+  weft clone https://github.com/you/repo
+  weft export --git repo   # conventional commits, provenance in trailers
+
+See it prove itself in two minutes:
+
+  git clone https://github.com/spranab/weft && cd weft
+  cargo run --release -p weftd --example paper   # 4 local models, 1 refused citation
+
+Why: verification — not human review — is the merge gate. Every change carries
+signed provenance, machine-checkable intent, and evidence.
+Docs: https://weftgate.com    Agents: https://weftgate.com/llms.txt
+
+$ ~/.weft/bin/weftd --help-ish (starts a hub)
+weftd: evidence sandbox = unshare
+weftd listening on 0.0.0.0:8790  gate=5b8398bc4c1833cff7e0b2ff59c6e2af1dcf315535e074d6253a997d82af8fe9

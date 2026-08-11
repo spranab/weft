@@ -1,0 +1,20 @@
+# cargo run --release -p weftd --example docs
+
+agent handbook — the artifact is prose, not code
+
+gate: doc-checks passed, 1 batch awaiting a judge verdict
+  judge handbook/onboarding.md: PASS — clear, structured, 32 words
+  judge handbook/evidence.md: PASS — clear, structured, 35 words
+  judge handbook/revocation.md: PASS — clear, structured, 33 words
+doc-check: ok
+
+✓ landed seq 0: three handbook sections, one certified landing
+doc-check: ['handbook\\policy.md: contains TODO']
+✗ unfinished section refused — the judge said yes; the deterministic
+  doc-check said no, and the gate is an AND
+
+rejects: 1
+
+nothing in the protocol is code-shaped: the artifact is Markdown,
+the evidence is a doc linter, the judgement is an attestor's signature.
+gate key 39351db3 · judge key e0422310

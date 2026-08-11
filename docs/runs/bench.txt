@@ -1,0 +1,10 @@
+# cargo run --release -p weftd --example bench
+# Windows 11 · 32 logical cores · release build
+
+weft-bench  (32 logical cores, release=true)
+B1 object ingest         24687 obj/s   (decode+verify+store, n=2000)
+B2 materialize   100        0.4 ms     (300 lines, 227324 changes/s)
+B2 materialize  1000        2.0 ms     (1200 lines, 489463 changes/s)
+B2 materialize  5000        8.8 ms     (5200 lines, 571314 changes/s)
+B3 gate disjoint         39460 chg/s   (500 proposals → 1 landing(s): batching)
+B4 gate contended         1038 chg/s   (300 same-file appends → 301 landings: serialized)
