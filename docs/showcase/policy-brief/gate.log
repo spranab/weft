@@ -1,0 +1,17 @@
+# Document — three agents write a brief; every claim must cite a listed source
+#
+# checker: every bracketed citation resolves in sources.md
+
+## what the gate did
+
+LANDED  seq 0  scaffold
+LANDED  seq 1  claude-fable-5 contributes to brief.md
+LANDED  seq 2  gpt-5.6-sol contributes to brief.md
+REFUSED {"proposal":"02a80f54cdfa291bfd7f69f2c95173faabae00940fae5b1ff5db6a23ee529a98","errors":["evidence failed"]}
+
+## the same checker, run over each output
+
+without-weft/  FAIL  cite-check: fabricated citation(s): [7]
+with-weft/     PASS  cite-check: ok - all citations resolve
+
+# the flawed contribution came from local-drafter — cites [7], which is not in sources.md — a fabricated reference

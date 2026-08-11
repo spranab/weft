@@ -1,0 +1,18 @@
+# Code — three agents extend a client module (it must still import and pass tests)
+#
+# checker: the module compiles and the test suite passes
+
+## what the gate did
+
+LANDED  seq 0  scaffold
+LANDED  seq 1  claude-fable-5 contributes to client.py
+LANDED  seq 2  gpt-5.6-sol contributes to client.py
+REFUSED {"proposal":"4b121fdfecd9f1ffdd34929a0da56c423736df4e9512a7dde3e1ddc9235f71f2","errors":["evidence failed"]}
+
+## the same checker, run over each output
+
+without-weft/  FAIL  code-check: client.py does not compile - File "client.py", line 24
+    raise RuntimeError
+with-weft/     PASS  code-check: ok - imports and tests pass
+
+# the flawed contribution came from local-drafter — unbalanced parenthesis — the module no longer imports, so every test fails

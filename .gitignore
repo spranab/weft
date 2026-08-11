@@ -8,3 +8,4 @@ __pycache__/
 integrations/openclaw-weft/node_modules/
 integrations/openclaw-weft/dist/
 integrations/hermes-weft/__pycache__/
+docs/showcase/**/__pycache__/

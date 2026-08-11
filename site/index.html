@@ -83,6 +83,13 @@
   .term .r { color: var(--bad); }
   .term .a { color: var(--accent); }
 
+  .artifacts { display: flex; flex-direction: column; gap: 1.4rem; }
+  .art { background: var(--bg1); border: 1px solid var(--line);
+    border-radius: 12px; padding: 1rem 1.2rem 1.1rem; }
+  .art-h { font-size: .84rem; color: var(--dim); margin-bottom: .5rem; }
+  .art-h span { color: var(--accent); font-weight: 650; text-transform: uppercase;
+    letter-spacing: .1em; font-size: .72rem; margin-right: .6rem; }
+
   .receipts { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px,1fr));
     gap: .5rem; }
   .rc { display: flex; flex-direction: column; gap: .25rem;
@@ -155,6 +162,7 @@
   <span class="spacer"></span>
   <a href="https://demo.weftgate.com">Live demo</a>
   <a href="#demos">Demos</a>
+  <a href="#artifacts">Artifacts</a>
   <a href="#proof">Proof</a>
   <a href="#uses">Use cases</a>
   <a href="#plug">Integrations</a>
@@ -644,6 +652,103 @@ function copyBlock(btn) {
       lookup.</p>
     </div>
   </div>
+</section>
+
+<section id="artifacts">
+  <h2>The same work, with and without a gate</h2>
+  <p class="lead">Three workloads. Identical agents, identical contributions,
+  assembled two ways — then the <em>same validator</em> run over both. The
+  difference isn't an argument, it's an exit code.</p>
+
+  <div class="artifacts">
+    <div class="art">
+      <div class="art-h"><span>Spreadsheet</span> four agents append regional rows to one CSV</div>
+      <div class="plug-two">
+        <div class="term" style="font-size:.74rem;line-height:1.7">
+          <span class="r">✗ without-weft/sales.csv</span><br>
+          <span class="c">region,quarter,units,revenue_usd</span><br>
+          north,2026-Q2,1840,412300.00<br>
+          south,2026-Q2,1120,268900.00<br>
+          west,2026-Q3,2402,617300.00<br>
+          <span class="r">east,Q2 2026,1450,approx 350k</span><br>
+          <span class="r">csv-check: FAIL — quarter not YYYY-Qn,<br>
+          revenue is not a number</span>
+        </div>
+        <div class="term" style="font-size:.74rem;line-height:1.7">
+          <span class="g">✓ with-weft/sales.csv</span><br>
+          <span class="c">region,quarter,units,revenue_usd</span><br>
+          north,2026-Q2,1840,412300.00<br>
+          south,2026-Q2,1120,268900.00<br>
+          west,2026-Q3,2402,617300.00<br>
+          <span class="c">(the malformed rows never landed)</span><br>
+          <span class="g">csv-check: PASS — 6 rows</span>
+        </div>
+      </div>
+      <p class="plug-note"><a href="https://github.com/spranab/weft/blob/main/docs/showcase/sales-report/without-weft/sales.csv">without ↗</a> ·
+        <a href="https://github.com/spranab/weft/blob/main/docs/showcase/sales-report/with-weft/sales.csv">with ↗</a> ·
+        <a href="https://github.com/spranab/weft/blob/main/docs/showcase/sales-report/gate.log">gate.log ↗</a></p>
+    </div>
+
+    <div class="art">
+      <div class="art-h"><span>Code</span> three agents extend a Python client module</div>
+      <div class="plug-two">
+        <div class="term" style="font-size:.74rem;line-height:1.7">
+          <span class="r">✗ without-weft/client.py</span><br>
+          <span class="c">…</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;except Exception:<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;continue<br>
+          <span class="r">&nbsp;&nbsp;&nbsp;&nbsp;raise RuntimeError("giving up".format(n)</span><br>
+          <span class="r">code-check: FAIL — does not compile,<br>
+          so every test fails</span>
+        </div>
+        <div class="term" style="font-size:.74rem;line-height:1.7">
+          <span class="g">✓ with-weft/client.py</span><br>
+          <span class="c">…</span><br>
+          def with_query(url, **params):<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;q = "&amp;".join(...)<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;return f"{url}?{q}"<br>
+          <span class="c">(the broken helper never landed)</span><br>
+          <span class="g">code-check: PASS — imports, tests pass</span>
+        </div>
+      </div>
+      <p class="plug-note"><a href="https://github.com/spranab/weft/blob/main/docs/showcase/api-client/without-weft/client.py">without ↗</a> ·
+        <a href="https://github.com/spranab/weft/blob/main/docs/showcase/api-client/with-weft/client.py">with ↗</a> ·
+        <a href="https://github.com/spranab/weft/blob/main/docs/showcase/api-client/gate.log">gate.log ↗</a></p>
+    </div>
+
+    <div class="art">
+      <div class="art-h"><span>Document</span> three agents write a policy brief</div>
+      <div class="plug-two">
+        <div class="term" style="font-size:.74rem;line-height:1.7">
+          <span class="r">✗ without-weft/brief.md</span><br>
+          ## Recommendation<br>
+          Industry benchmarks show a 40% reduction<br>
+          in mean time to recovery after adopting<br>
+          <span class="r">this control [7].</span><br>
+          <span class="r">cite-check: FAIL — fabricated citation [7]</span>
+        </div>
+        <div class="term" style="font-size:.74rem;line-height:1.7">
+          <span class="g">✓ with-weft/brief.md</span><br>
+          ## Vendor exposure<br>
+          The vendor's controls were attested in<br>
+          April [3]; no gaps were material [1].<br>
+          <span class="c">(the fabricated claim never landed)</span><br>
+          <span class="g">cite-check: PASS — all citations resolve</span>
+        </div>
+      </div>
+      <p class="plug-note"><a href="https://github.com/spranab/weft/blob/main/docs/showcase/policy-brief/without-weft/brief.md">without ↗</a> ·
+        <a href="https://github.com/spranab/weft/blob/main/docs/showcase/policy-brief/with-weft/brief.md">with ↗</a> ·
+        <a href="https://github.com/spranab/weft/blob/main/docs/showcase/policy-brief/gate.log">gate.log ↗</a></p>
+    </div>
+  </div>
+
+  <p class="plug-note"><strong>3/3 unguarded outputs failed their own
+  validator. 3/3 gated outputs passed it.</strong> The agents were identical
+  in both columns — nobody got smarter and nobody wrote a better prompt. The
+  only difference is whether anything checked before the work became the
+  artifact. Browse every file, and the notes on what's planted vs realistic:
+  <a href="https://github.com/spranab/weft/blob/main/docs/showcase/">docs/showcase ↗</a> ·
+  regenerate with <span class="mono">--example showcase</span></p>
 </section>
 
 <section id="proof">

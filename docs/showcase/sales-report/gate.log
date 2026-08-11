@@ -1,0 +1,18 @@
+# Spreadsheet — four agents append regional sales to one CSV
+#
+# checker: column count, quarter format YYYY-Qn, numeric units and revenue
+
+## what the gate did
+
+LANDED  seq 0  scaffold
+LANDED  seq 1  claude-fable-5 contributes to sales.csv
+LANDED  seq 2  gpt-5.6-sol contributes to sales.csv
+LANDED  seq 3  qwen3.8-max contributes to sales.csv
+REFUSED {"proposal":"20591ecafd235b2319991b3cd6a628a9bee216709837e4e55b9522c4bcd0b6a3","errors":["evidence failed"]}
+
+## the same checker, run over each output
+
+without-weft/  FAIL  csv-check: row 8: quarter 'Q2 2026' is not YYYY-Qn; row 8: revenue 'approx 350k' is not a number
+with-weft/     PASS  csv-check: ok - 6 rows
+
+# the flawed contribution came from local-drafter — Q2 2026 is not the agreed quarter format, and revenue is not a number
