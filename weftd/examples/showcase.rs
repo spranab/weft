@@ -36,6 +36,9 @@ struct Scenario {
     contributions: &'static [Contribution],
     /// the validator, run by the gate AND (afterwards) over both outputs
     checker: &'static str,
+    /// an explicit command; empty means `python -c <checker>`. A recipe is
+    /// just a command — your existing test runner qualifies.
+    cmd: &'static [&'static str],
     checker_desc: &'static str,
 }
 
@@ -59,6 +62,7 @@ const SALES: Scenario = Scenario {
             why: "Q2 2026 is not the agreed quarter format, and revenue is not a number",
             lines: &["east,Q2 2026,1450,approx 350k", "east,2026-Q3,1502,371200.00"] },
     ],
+    cmd: &[],
     checker_desc: "column count, quarter format YYYY-Qn, numeric units and revenue",
     checker: "import csv,sys,re\n\
         bad=[]\n\
@@ -106,6 +110,7 @@ const CODE: Scenario = Scenario {
                      "    raise RuntimeError(\"giving up after {} attempts\".format(attempts)",
                      ""] },
     ],
+    cmd: &[],
     checker_desc: "the module compiles and the test suite passes",
     checker: "import py_compile,subprocess,sys\n\
         try:\n\
@@ -142,12 +147,59 @@ const BRIEF: Scenario = Scenario {
                      "Industry benchmarks show a 40% reduction in mean time to",
                      "recovery after adopting this control [7].", ""] },
     ],
+    cmd: &[],
     checker_desc: "every bracketed citation resolves in sources.md",
     checker: "import re,sys\n\
         refs=set(re.findall(r'\\[(\\d+)\\]', open('sources.md',encoding='utf-8').read()))\n\
         bad=[c for c in re.findall(r'\\[(\\d+)\\]', open('brief.md',encoding='utf-8').read()) if c not in refs]\n\
         print('cite-check:', 'ok - all citations resolve' if not bad else 'fabricated citation(s): '+', '.join('['+c+']' for c in sorted(set(bad))))\n\
         sys.exit(1 if bad else 0)",
+};
+
+
+// ── 4. the gate is literally your existing test command ───────────────────
+const TESTS: Scenario = Scenario {
+    dir: "existing-tests",
+    title: "Your existing tests — the gate recipe is `python -m pytest -q`, unchanged",
+    base: &[
+        ("retryx.py", &["\"\"\"Retry helpers.\"\"\"", "", "",
+                        "def retry(fn, attempts=3):",
+                        "    last = None",
+                        "    for _ in range(attempts):",
+                        "        try:",
+                        "            return fn()",
+                        "        except Exception as exc:",
+                        "            last = exc",
+                        "    raise last", ""]),
+        ("test_retryx.py", &["from retryx import retry", "", "",
+                             "def test_retry_succeeds_after_failures():",
+                             "    calls = {\"n\": 0}", "",
+                             "    def flaky():",
+                             "        calls[\"n\"] += 1",
+                             "        if calls[\"n\"] < 3:",
+                             "            raise ValueError(\"not yet\")",
+                             "        return \"ok\"", "",
+                             "    assert retry(flaky, attempts=5) == \"ok\""]),
+    ],
+    contributions: &[
+        Contribution { model: "claude-fable-5", file: "retryx.py", flawed: false, why: "",
+            lines: &["def constant_backoff(attempt, delay=0.5):",
+                     "    return delay", ""] },
+        Contribution { model: "gpt-5.6-sol", file: "retryx.py", flawed: false, why: "",
+            lines: &["def expo_backoff(attempt, base=0.25, cap=8.0):",
+                     "    return min(cap, base * (2 ** attempt))", ""] },
+        // the realistic failure: an agent "improves" retry by redefining it at
+        // the end of the file. Python takes the last definition — the existing
+        // test breaks, and nothing about the diff looks alarming.
+        Contribution { model: "local-drafter", file: "retryx.py", flawed: true,
+            why: "redefines retry() so it swallows failures and returns None — the existing test breaks",
+            lines: &["def retry(fn, attempts=3):",
+                     "    try:", "        return fn()",
+                     "    except Exception:", "        return None", ""] },
+    ],
+    cmd: &["python", "-m", "pytest", "-q"],
+    checker_desc: "the repository's own pytest suite, run verbatim",
+    checker: "",
 };
 
 fn write_tree(dir: &Path, files: &[(String, Vec<u8>)]) {
@@ -162,14 +214,22 @@ fn write_tree(dir: &Path, files: &[(String, Vec<u8>)]) {
     }
 }
 
-fn run_checker(dir: &Path, checker: &str) -> (bool, String) {
+fn run_checker(dir: &Path, sc: &Scenario) -> (bool, String) {
     let py = if cfg!(windows) { "python" } else { "python3" };
-    let out = std::process::Command::new(py).args(["-c", checker])
-        .current_dir(dir).output().expect("python");
+    let out = if sc.cmd.is_empty() {
+        std::process::Command::new(py).args(["-c", sc.checker])
+            .current_dir(dir).output().expect("python")
+    } else {
+        std::process::Command::new(sc.cmd[0]).args(&sc.cmd[1..])
+            .current_dir(dir).output().expect("checker command")
+    };
     let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
     let text = if text.is_empty() {
         String::from_utf8_lossy(&out.stderr).trim().to_string()
     } else { text };
+    // keep the last meaningful line (pytest prints a summary there)
+    let text = text.lines().rev().find(|l| !l.trim().is_empty())
+        .unwrap_or("").trim().to_string();
     (out.status.success(), text)
 }
 
@@ -198,8 +258,12 @@ fn run_scenario(sc: &Scenario, out: &Path) -> (String, bool, bool) {
             ("recipes", V::Arr(vec![V::map(vec![
                 ("kind", V::Text("test".into())),
                 ("image", V::Text("local".into())),
-                ("cmd", V::Arr(vec![V::Text(py.into()), V::Text("-c".into()),
-                                    V::Text(sc.checker.into())]))])])),
+                ("cmd", V::Arr(if sc.cmd.is_empty() {
+                    vec![V::Text(py.into()), V::Text("-c".into()),
+                         V::Text(sc.checker.into())]
+                } else {
+                    sc.cmd.iter().map(|c| V::Text((*c).into())).collect()
+                }))])])),
             ("approvals", V::Int(0)),
             ("stale_reads", V::Text("warn".into()))])),
         ("config_init", V::map(vec![]))]), None);
@@ -305,8 +369,8 @@ fn run_scenario(sc: &Scenario, out: &Path) -> (String, bool, bool) {
     write_tree(&base_dir.join("without-weft"), &naive);
 
     // ── the same validator over both ────────────────────────────────────
-    let (with_ok, with_msg) = run_checker(&base_dir.join("with-weft"), sc.checker);
-    let (naive_ok, naive_msg) = run_checker(&base_dir.join("without-weft"), sc.checker);
+    let (with_ok, with_msg) = run_checker(&base_dir.join("with-weft"), sc);
+    let (naive_ok, naive_msg) = run_checker(&base_dir.join("without-weft"), sc);
     for d in ["with-weft", "without-weft"] {   // the checker may leave bytecode
         let _ = std::fs::remove_dir_all(base_dir.join(d).join("__pycache__"));
     }
@@ -339,7 +403,7 @@ fn main() {
         .unwrap_or_else(|| "docs/showcase".into()).into();
     println!("weft · same agents, same work, two pipelines\n");
     let mut rows = Vec::new();
-    for sc in [&SALES, &CODE, &BRIEF] {
+    for sc in [&SALES, &CODE, &BRIEF, &TESTS] {
         let (_, naive_ok, with_ok) = run_scenario(sc, &out);
         println!("  {}", sc.title);
         println!("     without weft: {}   with weft: {}",

@@ -16,9 +16,14 @@ an argument; it's an exit code.
 | [Spreadsheet](sales-report/) — four agents append regional rows to one CSV | **FAIL** — `quarter 'Q2 2026' is not YYYY-Qn; revenue 'approx 350k' is not a number` | **PASS** — 6 clean rows | [without](sales-report/without-weft/sales.csv) · [with](sales-report/with-weft/sales.csv) · [log](sales-report/gate.log) |
 | [Code](api-client/) — three agents extend a Python client | **FAIL** — the module no longer compiles, so every test fails | **PASS** — imports and tests pass | [without](api-client/without-weft/client.py) · [with](api-client/with-weft/client.py) · [log](api-client/gate.log) |
 | [Document](policy-brief/) — three agents write a policy brief | **FAIL** — `fabricated citation(s): [7]` | **PASS** — all citations resolve | [without](policy-brief/without-weft/brief.md) · [with](policy-brief/with-weft/brief.md) · [log](policy-brief/gate.log) |
+| [Existing tests](existing-tests/) — the gate is `python -m pytest -q`, unchanged | **FAIL** — `1 failed` (an agent redefined `retry()`) | **PASS** — `1 passed` | [without](existing-tests/without-weft/retryx.py) · [with](existing-tests/with-weft/retryx.py) · [log](existing-tests/gate.log) |
 
-**3/3 unguarded outputs failed their own validator. 3/3 gated outputs passed
+**4/4 unguarded outputs failed their own validator. 4/4 gated outputs passed
 it.**
+
+The fourth is the one to look at if you're wondering how much work a gate is:
+its recipe is the repository's own `pytest` command, verbatim. Nothing was
+written for Weft. See [writing gates](../writing-gates.md).
 
 ## The point
 

@@ -7,7 +7,7 @@
 LANDED  seq 0  scaffold
 LANDED  seq 1  claude-fable-5 contributes to brief.md
 LANDED  seq 2  gpt-5.6-sol contributes to brief.md
-REFUSED {"proposal":"02a80f54cdfa291bfd7f69f2c95173faabae00940fae5b1ff5db6a23ee529a98","errors":["evidence failed"]}
+REFUSED {"proposal":"6cc2e1d43593bbac3952b71a91a34267479c1e3a049678446d1eabd8081d5c86","errors":["evidence failed"]}
 
 ## the same checker, run over each output
 

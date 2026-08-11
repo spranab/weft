@@ -742,8 +742,35 @@ function copyBlock(btn) {
     </div>
   </div>
 
-  <p class="plug-note"><strong>3/3 unguarded outputs failed their own
-  validator. 3/3 gated outputs passed it.</strong> The agents were identical
+  <div class="art">
+      <div class="art-h"><span>Your existing tests</span> the gate recipe is
+      <span class="mono">python -m pytest -q</span>, unchanged — nothing written for Weft</div>
+      <div class="plug-two">
+        <div class="term" style="font-size:.74rem;line-height:1.7">
+          <span class="r">✗ without-weft/retryx.py</span><br>
+          <span class="c">…an agent "improves" retry() at the<br>
+          end of the file; Python takes the last def</span><br>
+          <span class="r">def retry(fn, attempts=3):</span><br>
+          <span class="r">&nbsp;&nbsp;&nbsp;&nbsp;except Exception: return None</span><br>
+          <span class="r">1 failed — assert None == 'ok'</span>
+        </div>
+        <div class="term" style="font-size:.74rem;line-height:1.7">
+          <span class="g">✓ with-weft/retryx.py</span><br>
+          <span class="c">…the two safe additions landed;<br>
+          the redefinition never did</span><br>
+          def constant_backoff(attempt, delay=0.5):<br>
+          def expo_backoff(attempt, base=0.25, cap=8.0):<br>
+          <span class="g">1 passed</span>
+        </div>
+      </div>
+      <p class="plug-note"><a href="https://github.com/spranab/weft/blob/main/docs/showcase/existing-tests/without-weft/retryx.py">without ↗</a> ·
+        <a href="https://github.com/spranab/weft/blob/main/docs/showcase/existing-tests/with-weft/retryx.py">with ↗</a> ·
+        <a href="https://github.com/spranab/weft/blob/main/docs/showcase/existing-tests/gate.log">gate.log ↗</a></p>
+    </div>
+  </div>
+
+  <p class="plug-note"><strong>4/4 unguarded outputs failed their own
+  validator. 4/4 gated outputs passed it.</strong> The agents were identical
   in both columns — nobody got smarter and nobody wrote a better prompt. The
   only difference is whether anything checked before the work became the
   artifact. Browse every file, and the notes on what's planted vs realistic:
@@ -937,6 +964,36 @@ function copyBlock(btn) {
       observed what — has no home in a PR. And the queue, reviews, and issues
       live in the forge's database: clone the repo, lose the coordination.
       Weft's coordination state replicates with the repo.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>How hard is it to write the gates?</summary>
+    <div>
+      <p>For most repositories you don't write one — you point at the checks
+      you already have. An evidence recipe is a <em>command</em>. If your
+      project has a test command, that command is a valid gate today,
+      unmodified:</p>
+      <p><span class="mono">"recipes": [{ "kind": "test", "cmd": ["python",
+      "-m", "pytest", "-q"] }]</span></p>
+      <p>That's the entire gate for
+      <a href="https://github.com/spranab/weft/blob/main/docs/showcase/existing-tests/">one of the showcase
+      scenarios</a> — three agents extend a module, one "improves" a function
+      in a way that breaks the existing test, and the gate refuses it. Nothing
+      was written for Weft. <span class="mono">cargo test</span>,
+      <span class="mono">npm test</span>,
+      <span class="mono">go test ./...</span> work the same way.</p>
+      <p>There's a ladder above that: no recipes at all is legal (you still
+      get provenance, capabilities and concurrent landing); then your existing
+      CI checks, one line each; then a domain check like a CSV schema or
+      citation validator, which in the showcase are about ten lines of Python;
+      then human approvals on sensitive paths; then independent judges from
+      distinct trust roots for subjective work. Most teams sit between rungs
+      one and three indefinitely.</p>
+      <p>What <em>is</em> real work, stated plainly: key management, running
+      the hub, deciding policy — and the fact that a bad check is worse than
+      no check. <a href="https://github.com/spranab/weft/blob/main/docs/writing-gates.md">The full answer, with
+      costs per rung ↗</a></p>
     </div>
   </details>
 

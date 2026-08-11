@@ -7,12 +7,11 @@
 LANDED  seq 0  scaffold
 LANDED  seq 1  claude-fable-5 contributes to client.py
 LANDED  seq 2  gpt-5.6-sol contributes to client.py
-REFUSED {"proposal":"4b121fdfecd9f1ffdd34929a0da56c423736df4e9512a7dde3e1ddc9235f71f2","errors":["evidence failed"]}
+REFUSED {"proposal":"96f39b68d3ac45ffafd171928aaa9494f582f3c5f6ca9756ee0f4b38fd12dd93","errors":["evidence failed"]}
 
 ## the same checker, run over each output
 
-without-weft/  FAIL  code-check: client.py does not compile - File "client.py", line 24
-    raise RuntimeError
+without-weft/  FAIL  raise RuntimeError
 with-weft/     PASS  code-check: ok - imports and tests pass
 
 # the flawed contribution came from local-drafter — unbalanced parenthesis — the module no longer imports, so every test fails

@@ -126,6 +126,20 @@ The verbatim output of a real run — including the prose the models produced an
 the refused section — is in [docs/runs/paper.txt](docs/runs/paper.txt), alongside
 [recorded runs](docs/runs/) of every demo, the full test suite, and the installer.
 
+## How much work is a gate?
+
+Usually one line — your existing test command *is* the recipe:
+
+```jsonc
+"recipes": [ { "kind": "test", "cmd": ["python", "-m", "pytest", "-q"] } ]
+```
+
+That's the whole gate for [one showcase scenario](docs/showcase/existing-tests/),
+where an agent "improves" a function, breaks the existing test, and is refused.
+The ladder from there — CI checks, domain validators, human approvals,
+independent judges — with honest costs per rung:
+[docs/writing-gates.md](docs/writing-gates.md).
+
 ## For AI agents (MCP)
 
 Weft ships an [MCP server](weft-mcp/) — agents connect over the Model Context

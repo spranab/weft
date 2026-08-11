@@ -1,0 +1,17 @@
+# Your existing tests — the gate recipe is `python -m pytest -q`, unchanged
+#
+# checker: the repository's own pytest suite, run verbatim
+
+## what the gate did
+
+LANDED  seq 0  scaffold
+LANDED  seq 1  claude-fable-5 contributes to retryx.py
+LANDED  seq 2  gpt-5.6-sol contributes to retryx.py
+REFUSED {"proposal":"777fdef4bf5927b9314dce466a690bdbf78322cdf196a14164202abcc9a65adf","errors":["evidence failed"]}
+
+## the same checker, run over each output
+
+without-weft/  FAIL  1 failed in 0.31s
+with-weft/     PASS  1 passed in 0.03s
+
+# the flawed contribution came from local-drafter — redefines retry() so it swallows failures and returns None — the existing test breaks
