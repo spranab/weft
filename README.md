@@ -3,6 +3,7 @@
 [![CI](https://github.com/spranab/weft/actions/workflows/ci.yml/badge.svg)](https://github.com/spranab/weft/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Spec](https://img.shields.io/badge/RFC--0001-v0.3-d9a441.svg)](rfcs/0001-weft-protocol.md)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21882499.svg)](https://doi.org/10.5281/zenodo.21882499)
 
 **Weft is a coordination and verification protocol for autonomous software
 agents** — an open-source, self-hosted execution ledger where **verification,
@@ -71,10 +72,20 @@ reasoning is caught even when diffs don't overlap · permissions are scoped,
 expiring and revocable instead of a shared bot token.
 
 **Paper:** [Weft: Evidence-Gated Version Control for Autonomous Agent
-Swarms](docs/weft-whitepaper.md) — design, related work, evaluation across four
-workloads, and an explicit limitations section.
-([PDF](https://weftgate.com/weft-whitepaper.pdf) ·
-[Zenodo bundle](docs/papers/zenodo-bundle/))
+Swarms](https://doi.org/10.5281/zenodo.21882499) — design, related work, evaluation across four workloads, and an
+explicit limitations section.
+([markdown](docs/weft-whitepaper.md) · [PDF](https://weftgate.com/weft-whitepaper.pdf))
+
+```bibtex
+@article{sarkar2026weft,
+  title   = {Weft: Evidence-Gated Version Control for Autonomous Agent Swarms},
+  author  = {Sarkar, Pranab},
+  year    = {2026},
+  doi     = {10.5281/zenodo.21882499},
+  url     = {https://doi.org/10.5281/zenodo.21882499},
+  publisher = {Zenodo}
+}
+```
 
 ## Why not just git + GitHub?
 

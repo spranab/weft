@@ -9,7 +9,7 @@ urlcolor: blue
 
 **Pranab Sarkar** — Independent Researcher
 [developer@pranab.co.in](mailto:developer@pranab.co.in) · ORCID: [0009-0009-8683-1481](https://orcid.org/0009-0009-8683-1481)
-Preprint v1 — August 2026 — License: CC-BY 4.0
+Preprint v1 — August 2026 — License: CC-BY 4.0 — DOI: [10.5281/zenodo.21882499](https://doi.org/10.5281/zenodo.21882499)
 Code and data: [github.com/spranab/weft](https://github.com/spranab/weft) · [weftgate.com](https://weftgate.com)
 
 ---

@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use Weft, please cite the paper below."
+title: "Weft: an execution ledger for autonomous coding agents"
+abstract: >-
+  Weft is a coordination and verification protocol for autonomous software
+  agents, in which integration is gated by machine-checkable evidence bound to
+  exact content rather than by human review.
+type: software
+authors:
+  - family-names: Sarkar
+    given-names: Pranab
+    orcid: "https://orcid.org/0009-0009-8683-1481"
+repository-code: "https://github.com/spranab/weft"
+url: "https://weftgate.com"
+license: MIT
+version: 0.1.0
+date-released: "2026-08-11"
+keywords:
+  - version control
+  - autonomous agents
+  - multi-agent systems
+  - software verification
+  - optimistic concurrency control
+  - CRDT
+  - capability-based security
+preferred-citation:
+  type: article
+  title: "Weft: Evidence-Gated Version Control for Autonomous Agent Swarms"
+  authors:
+    - family-names: Sarkar
+      given-names: Pranab
+      orcid: "https://orcid.org/0009-0009-8683-1481"
+  doi: "10.5281/zenodo.21882499"
+  url: "https://doi.org/10.5281/zenodo.21882499"
+  year: 2026
+  month: 8
+  publisher:
+    name: Zenodo
