@@ -10,3 +10,4 @@ integrations/openclaw-weft/dist/
 integrations/hermes-weft/__pycache__/
 docs/showcase/**/__pycache__/
 site/weft-whitepaper.pdf
+docs/papers/zenodo-bundle/weft-whitepaper.html

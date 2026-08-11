@@ -1,11 +1,16 @@
+---
+geometry: margin=1in
+fontsize: 11pt
+linkcolor: black
+urlcolor: blue
+---
+
 # Weft: Evidence-Gated Version Control for Autonomous Agent Swarms
 
-**Author:** Pranab Sarkar
-**ORCID:** 0009-0009-8683-1481
-**Date:** August 2026
-**License:** CC-BY-4.0
-**Project:** https://weftgate.com
-**Code and data:** https://github.com/spranab/weft
+**Pranab Sarkar** — Independent Researcher
+[developer@pranab.co.in](mailto:developer@pranab.co.in) · ORCID: [0009-0009-8683-1481](https://orcid.org/0009-0009-8683-1481)
+Preprint v1 — August 2026 — License: CC-BY 4.0
+Code and data: [github.com/spranab/weft](https://github.com/spranab/weft) · [weftgate.com](https://weftgate.com)
 
 ---
 
