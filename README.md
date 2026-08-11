@@ -70,6 +70,12 @@ every line traces to a model, a capability, and a human authority key · stale
 reasoning is caught even when diffs don't overlap · permissions are scoped,
 expiring and revocable instead of a shared bot token.
 
+**Paper:** [Weft: Evidence-Gated Version Control for Autonomous Agent
+Swarms](docs/weft-whitepaper.md) — design, related work, evaluation across four
+workloads, and an explicit limitations section.
+([PDF](https://weftgate.com/weft-whitepaper.pdf) ·
+[Zenodo bundle](docs/papers/zenodo-bundle/))
+
 ## Why not just git + GitHub?
 
 Everything git and forges layered on top of it assumes **human attention is
