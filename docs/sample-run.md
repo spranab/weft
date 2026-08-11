@@ -1,0 +1,113 @@
+# A real run of `--example paper`
+
+Verbatim output, four local models via Ollama (`gemma4:e4b`), nothing edited.
+Reproduce: `ollama serve && cargo run --release -p weftd --example paper`
+
+```text
+weft · four agents write a research paper
+
+  topic     verification-gated merging for autonomous coding agents
+  inference local — ollama/gemma4:e4b
+
+citation-check: ok
+  references landed — the citable ground truth
+
+  agents writing (concurrently)…
+    claude-fable-5 wrote paper/abstract.md (7 lines)
+    gpt-5.6-sol wrote paper/background.md (8 lines)
+    qwen3.8-max wrote paper/method.md (8 lines)
+    local-drafter wrote paper/findings.md (3 lines)
+
+  gate…
+citation-check: paper\findings.md: citation [9] is not in references.md
+citation-check: ok
+citation-check: paper\findings.md: citation [9] is not in references.md
+citation-check: ok
+citation-check: paper\findings.md: citation [9] is not in references.md
+
+  ── the paper ──
+    ✓ paper/abstract.md
+    ✓ paper/background.md
+    ✓ paper/method.md
+    ✓ paper/references.md
+    ✗ paper/findings.md — refused
+
+  ── what landed (verbatim, as the models wrote it) ──
+
+  ┌─ paper/abstract.md   [claude-fable-5]
+  │ ---
+  │ title: Abstract
+  │ ---
+  │ 
+  │ ## Abstract
+  │ 
+  │ Autonomous coding agents often struggle with integrating disparate code modules
+  │ due to potential verification failures and structural inconsistencies. We
+  │ introduce a novel framework that implements verification-gated merging,
+  │ ensuring that merged code adheres to predefined correctness constraints before
+  │ deployment. This approach significantly enhances the reliability of autonomous
+  │ systems by providing a rigorous mechanism for validating integrated code
+  │ structures [1].
+  └─
+
+  ┌─ paper/background.md   [gpt-5.6-sol]
+  │ ---
+  │ title: Background
+  │ ---
+  │ 
+  │ ## Background
+  │ 
+  │ Human code review remains a critical quality gate for software development, but
+  │ its inherent limitations create significant bottlenecks when coordinating large
+  │ agent swarms. As autonomous coding agents generate increasingly complex and
+  │ voluminous codebases, the sheer volume of necessary human oversight quickly
+  │ overwhelms individual reviewers [2]. This dependency on manual validation
+  │ introduces serialization points that drastically reduce the throughput and
+  │ scalability potential of highly parallelized agent systems. Consequently, the
+  │ bottleneck shifts from computational capacity to human cognitive bandwidth,
+  └─
+
+  ┌─ paper/method.md   [qwen3.8-max]
+  │ ---
+  │ title: Method
+  │ ---
+  │ 
+  │ ## Method
+  │ 
+  │ Evidence-gated landing ensures that the agent's proposed code modifications are
+  │ grounded in verifiable context before being integrated into the codebase. This
+  │ mechanism prevents speculative changes by requiring explicit evidence, such as
+  │ relevant function signatures or documentation snippets, to justify every
+  │ modification [1]. Specifically, the system evaluates whether the current task
+  │ objective can be directly mapped to existing code segments and associated
+  │ textual evidence [4]. Only when sufficient supporting evidence is gathered and
+  │ validated
+  └─
+
+  ┌─ paper/findings.md   [local-drafter]   REFUSED
+  │ ---
+  │ title: Findings
+  │ ---
+  │ 
+  │ ## Findings
+  │ 
+  │ This section on findings argues that evidence, not attention, should gate a
+  │ merge [1]. Concurrent agents make review the scarce resource [2].
+  │ This result is consistent with prior work [9]. ← citation [9] does not exist
+  └─ never reached the paper; the other sections were unaffected
+
+  ── traditional pipeline vs weft ──
+    traditional: 4 agents → 4 branches → a human concatenates,
+                 skims, and merges. The fabricated citation [9]
+                 ships unless a reviewer happens to check every
+                 bracket against the reference list. Nobody can
+                 say later which model wrote which paragraph.
+    weft:        the citation check ran on the exact bytes; the
+                 section citing [9] never landed.
+                 3 sections landed with signed provenance —
+                 every paragraph traces to a model, a delegated
+                 capability, and a human authority key.
+
+  landings: 3   rejections: 3
+  try:  weft export --git ./paper   → conventional commits, provenance in trailers
+```

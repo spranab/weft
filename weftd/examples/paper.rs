@@ -328,6 +328,40 @@ fn main() {
             println!("    ✗ {} — refused", a.file);
         }
     }
+
+    // ── the actual artifact, so nobody has to take our word for it ──────
+    println!("\n  ── what landed (verbatim, as the models wrote it) ──");
+    for (path, content) in &mat.tree {
+        if path.ends_with("references.md") {
+            continue;
+        }
+        let model = submitted.iter().find(|(a, _)| a.file == path)
+            .map(|(a, _)| a.model).unwrap_or("human/editor");
+        println!("\n  ┌─ {path}   [{model}]");
+        for line in String::from_utf8_lossy(content).lines() {
+            println!("  │ {line}");
+        }
+        println!("  └─");
+    }
+    for (a, change) in &submitted {
+        if mat.tree.contains_key(a.file) {
+            continue;
+        }
+        println!("\n  ┌─ {}   [{}]   REFUSED", a.file, a.model);
+        let patch = as_oid(h.store.body(change).get("patch").unwrap());
+        for op in h.store.body(&patch).get("ops").and_then(V::arr).unwrap_or(&[]) {
+            let op = op.arr().unwrap();
+            if op[0].text() != Some("insert") {
+                continue;
+            }
+            for l in op[3].arr().unwrap_or(&[]) {
+                let text = String::from_utf8_lossy(l.bytes().unwrap_or(b"")).to_string();
+                let flag = if text.contains("[9]") { " ← citation [9] does not exist" } else { "" };
+                println!("  │ {text}{flag}");
+            }
+        }
+        println!("  └─ never reached the paper; the other sections were unaffected");
+    }
     let cite_fail = rejects.contains("citation") || rejects.contains("evidence failed");
     println!("\n  ── traditional pipeline vs weft ──");
     println!("    traditional: 4 agents → 4 branches → a human concatenates,");

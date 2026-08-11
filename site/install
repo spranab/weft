@@ -1,0 +1,75 @@
+#!/bin/sh
+# Weft installer — the execution ledger for autonomous coding agents.
+#   curl -fsSL https://weftgate.com/install | sh
+# Installs weftd (hub + gate + console), weft (CLI + git bridge) and
+# weft-mcp (MCP agent door) into ~/.weft/bin. No sudo, no daemon, no signup.
+set -eu
+
+VERSION="${WEFT_VERSION:-0.1.0}"
+PREFIX="${WEFT_PREFIX:-$HOME/.weft}"
+BIN="$PREFIX/bin"
+REPO="spranab/weft"
+
+say() { printf '\033[33m%s\033[0m\n' "$*"; }
+die() { printf '\033[31mweft: %s\033[0m\n' "$*" >&2; exit 1; }
+
+case "$(uname -s)" in
+  Linux)  TARGET="x86_64-linux";  ARCHIVE="tar.gz" ;;
+  Darwin) die "macOS binaries are not published yet — build from source:
+    git clone https://github.com/$REPO && cd weft && cargo build --release" ;;
+  *)      die "unsupported platform $(uname -s). On Windows use the .zip from
+    https://github.com/$REPO/releases/latest" ;;
+esac
+[ "$(uname -m)" = "x86_64" ] || die "only x86_64 is published today (got $(uname -m))"
+
+URL="https://github.com/$REPO/releases/download/v$VERSION/weft-$VERSION-$TARGET.$ARCHIVE"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+say "→ downloading weft v$VERSION ($TARGET)"
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL "$URL" -o "$TMP/weft.tar.gz" || die "download failed: $URL"
+elif command -v wget >/dev/null 2>&1; then
+  wget -qO "$TMP/weft.tar.gz" "$URL" || die "download failed: $URL"
+else
+  die "need curl or wget"
+fi
+
+mkdir -p "$BIN"
+tar xzf "$TMP/weft.tar.gz" -C "$BIN"
+chmod +x "$BIN/weftd" "$BIN/weft" "$BIN/weft-mcp" 2>/dev/null || true
+
+printf '\n\033[32m✓ installed\033[0m %s\n' "$BIN/{weftd,weft,weft-mcp}"
+
+case ":$PATH:" in
+  *":$BIN:"*) ;;
+  *) printf '\nAdd it to your PATH:\n  \033[33mexport PATH="%s:$PATH"\033[0m\n' "$BIN"
+     printf '  (append that to ~/.bashrc or ~/.zshrc to make it stick)\n' ;;
+esac
+
+Y=$(printf '\033[33m'); D=$(printf '\033[0m'); G=$(printf '\033[2m')
+
+cat <<EOF
+
+Start a hub — console at http://localhost:8747:
+
+  ${Y}weftd${D}
+
+Give an agent the door (any MCP host — Hermes, OpenClaw, Claude Code, Codex):
+
+  ${G}{ "mcpServers": { "weft": { "command": "$BIN/weft-mcp" } } }${D}
+
+Bridge an existing GitHub repo, let agents land certified work, export it back:
+
+  ${Y}weft clone https://github.com/you/repo${D}
+  ${Y}weft export --git repo${D}   ${G}# conventional commits, provenance in trailers${D}
+
+See it prove itself in two minutes:
+
+  ${Y}git clone https://github.com/spranab/weft && cd weft${D}
+  ${Y}cargo run --release -p weftd --example paper${D}   ${G}# 4 local models, 1 refused citation${D}
+
+Why: verification — not human review — is the merge gate. Every change carries
+signed provenance, machine-checkable intent, and evidence.
+Docs: https://weftgate.com    Agents: https://weftgate.com/llms.txt
+EOF

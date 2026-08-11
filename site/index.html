@@ -83,6 +83,8 @@
   .term .r { color: var(--bad); }
   .term .a { color: var(--accent); }
 
+  .plug-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 860px) { .plug-two { grid-template-columns: 1fr; } }
   .plug-h { font-size: .72rem; letter-spacing: .13em; text-transform: uppercase;
     color: var(--faint); margin-bottom: .7rem; font-weight: 600; }
   .plug-note { font-size: .82rem; color: var(--faint); margin-top: .7rem; }
@@ -171,8 +173,11 @@
       <a class="btn primary" href="https://demo.weftgate.com">Open the live demo</a>
       <a class="btn ghost" href="https://github.com/spranab/weft">Star on GitHub</a>
     </div>
-    <div class="install"><code>$ <b>weft</b> clone https://github.com/you/repo
-      <span style="color:var(--faint)"># agents work · </span><b>weft</b> export</code></div>
+    <div class="install"><code>curl -fsSL <b>https://weftgate.com/install</b> | sh</code></div>
+    <p style="margin-top:.7rem;font-size:.84rem;color:var(--faint);position:relative">
+      prebuilt binaries · no signup · <span class="mono">weftd</span> then
+      <a href="http://localhost:8747">localhost:8747</a> ·
+      agents: <a href="/llms.txt">weftgate.com/llms.txt</a></p>
   </div>
 </div>
 
@@ -410,6 +415,44 @@ function copyBlock(btn) {
     <span class="r">✗</span> paper/findings.md — <span class="a">refused</span><br>
     <span class="c">$ cargo run --release -p weftd --example paper</span>
   </div>
+  <h3 class="plug-h" style="margin-top:1.6rem">What the models actually wrote — verbatim from that run</h3>
+  <div class="plug-two">
+    <div class="term" style="font-size:.76rem;line-height:1.6">
+      <span class="c">┌─ paper/background.md   [gpt-5.6-sol]   </span><span class="g">LANDED</span><br>
+      <span class="c">│</span> ---<br>
+      <span class="c">│</span> title: Background<br>
+      <span class="c">│</span> ---<br>
+      <span class="c">│</span><br>
+      <span class="c">│</span> ## Background<br>
+      <span class="c">│</span><br>
+      <span class="c">│</span> Human code review remains a critical quality gate for<br>
+      <span class="c">│</span> software development, but its inherent limitations create<br>
+      <span class="c">│</span> significant bottlenecks when coordinating large agent<br>
+      <span class="c">│</span> swarms. As autonomous coding agents generate increasingly<br>
+      <span class="c">│</span> complex and voluminous codebases, the sheer volume of<br>
+      <span class="c">│</span> necessary human oversight quickly overwhelms individual<br>
+      <span class="c">│</span> reviewers <span class="a">[2]</span>. This dependency on manual validation<br>
+      <span class="c">│</span> introduces serialization points that drastically reduce<br>
+      <span class="c">│</span> the throughput of highly parallelized agent systems.<br>
+      <span class="c">└─</span>
+    </div>
+    <div class="term" style="font-size:.76rem;line-height:1.6">
+      <span class="c">┌─ paper/findings.md   [local-drafter]   </span><span class="r">REFUSED</span><br>
+      <span class="c">│</span> ---<br>
+      <span class="c">│</span> title: Findings<br>
+      <span class="c">│</span> ---<br>
+      <span class="c">│</span><br>
+      <span class="c">│</span> ## Findings<br>
+      <span class="c">│</span><br>
+      <span class="c">│</span> This section on findings argues that evidence, not<br>
+      <span class="c">│</span> attention, should gate a merge <span class="a">[1]</span>. Concurrent agents<br>
+      <span class="c">│</span> make review the scarce resource <span class="a">[2]</span>.<br>
+      <span class="c">│</span> This result is consistent with prior work <span class="r">[9]</span>.<br>
+      <span class="c">│</span> <span class="r">                                        ↑ no such source</span><br>
+      <span class="c">└─</span> never reached the paper; the others were unaffected
+    </div>
+  </div>
+
   <p class="plug-note">The citation checker ran on the exact materialized
   bytes; a judge attested from outside the sandbox; bisection isolated the
   bad section so the other three still landed. Nothing here is code-shaped —

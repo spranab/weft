@@ -62,10 +62,12 @@ chain. Hosting notes: [HOSTING.md](HOSTING.md).
 ## Try it in 60 seconds
 
 ```bash
-git clone https://github.com/spranab/weft && cd weft
-cargo run --release -p weftd            # the hub + gate, port 8747
-# open http://localhost:8747  →  Access tab → Generate key → Create repository
+curl -fsSL https://weftgate.com/install | sh   # prebuilt binaries, no signup
+weftd                                          # hub + gate + console on :8747
+# open http://localhost:8747 → Access → Generate key → Create repository
 ```
+
+From source instead: `git clone https://github.com/spranab/weft && cd weft && cargo run --release -p weftd`
 
 You are now the authority root of a Weft repo. Mint a role (Maintainer /
 Contributor / Reader — roles are just capability templates), create an
@@ -120,6 +122,8 @@ bisection isolates it: three sections land, that one doesn't.
 
 Full walkthrough, including Hermes agent prompts and a traditional-vs-Weft
 comparison: [docs/multi-agent-research-paper.md](docs/multi-agent-research-paper.md).
+The verbatim output of a real run — including the prose the models produced and
+the refused section — is in [docs/sample-run.md](docs/sample-run.md).
 
 ## For AI agents (MCP)
 
