@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: #0b0e12; color: #e5eaf0; position: relative; overflow: hidden;
+    font-family: -apple-system, "Segoe UI", system-ui, Roboto, sans-serif;
+    padding: 58px 64px; display: flex; flex-direction: column;
+  }
+  .warp { position: absolute; inset: 0; }
+  .brand { display: flex; align-items: baseline; gap: .5rem; position: relative;
+    font-size: 25px; font-weight: 700; letter-spacing: .01em; }
+  .brand .d { color: #5e6b78; font-weight: 400; font-size: 20px; }
+  h1 { position: relative; font-size: 68px; line-height: 1.06; font-weight: 750;
+    letter-spacing: -.022em; margin-top: 30px; }
+  h1 em { color: #e2a83d; font-style: normal; }
+  .sub { position: relative; color: #93a0ae; font-size: 25px; margin-top: 16px; }
+  .spacer { flex: 1; }
+  .cmp { position: relative; display: grid; grid-template-columns: 1fr 1fr;
+    gap: 18px; font-family: ui-monospace, Consolas, monospace; }
+  .box { background: #0a0d10; border: 1px solid #232b36; border-radius: 12px;
+    padding: 16px 20px; font-size: 18px; line-height: 1.65; }
+  .box.bad { border-left: 4px solid #d96c6c; }
+  .box.good { border-left: 4px solid #52b381; }
+  .lbl { font-size: 15px; letter-spacing: .12em; text-transform: uppercase;
+    color: #5e6b78; margin-bottom: 8px; }
+  .r { color: #d96c6c; } .g { color: #52b381; } .c { color: #5e6b78; }
+  .foot { position: relative; display: flex; justify-content: space-between;
+    align-items: baseline; margin-top: 24px; color: #5e6b78; font-size: 19px; }
+  .foot b { color: #e2a83d; font-weight: 600; }
+</style></head>
+<body>
+  <svg class="warp" viewBox="0 0 1200 630" preserveAspectRatio="none">
+    <g stroke="#1a2028" stroke-width="1">
+      <line x1="0" y1="120" x2="1200" y2="120"/><line x1="0" y1="240" x2="1200" y2="240"/>
+      <line x1="0" y1="360" x2="1200" y2="360"/><line x1="0" y1="480" x2="1200" y2="480"/>
+      <line x1="0" y1="600" x2="1200" y2="600"/>
+    </g>
+    <path d="M0,560 C260,560 260,80 520,80 S780,560 1040,560 S1300,80 1400,80"
+      fill="none" stroke="#e2a83d" stroke-width="2" opacity=".28"/>
+    <path d="M0,80 C260,80 260,560 520,560 S780,80 1040,80 S1300,560 1400,560"
+      fill="none" stroke="#6ea6dc" stroke-width="2" opacity=".16"/>
+  </svg>
+
+  <div class="brand">🧵 weft <span class="d">/ the execution ledger for coding agents</span></div>
+  <h1>Verification is<br>the <em>merge gate</em></h1>
+  <div class="sub">Same agents, same work. The only difference is whether anything checked.</div>
+
+  <div class="spacer"></div>
+
+  <div class="cmp">
+    <div class="box bad">
+      <div class="lbl">merged the normal way</div>
+      <span class="c">east,</span><span class="r">Q2 2026</span><span class="c">,1450,</span><span class="r">approx 350k</span><br>
+      <span class="r">✗ csv-check: FAIL</span>
+    </div>
+    <div class="box good">
+      <div class="lbl">through the gate</div>
+      <span class="c">(the malformed row never landed)</span><br>
+      <span class="g">✓ csv-check: PASS</span>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span><b>4/4</b> unguarded outputs failed their own validator. <b>4/4</b> gated ones passed.</span>
+    <span>weftgate.com</span>
+  </div>
+</body></html>
