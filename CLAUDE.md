@@ -28,6 +28,9 @@ console (Access tab).
 
 ## Architecture map
 
+- `docs/weft-whitepaper.md` — the published paper ([10.5281/zenodo.21882499](https://doi.org/10.5281/zenodo.21882499)). Design
+  rationale and evaluation; cite it rather than re-deriving the argument. If a
+  change invalidates a claim in it, say so.
 - `rfcs/0001-weft-protocol.md` — **source of truth.** Any behavior change
   must update the spec; any discovered defect gets a numbered finding in
   `rfcs/0001-review-log.md` with a disposition.

@@ -93,8 +93,12 @@ Do not weaken the check — the check is the point.
 
 ## Docs
 
+- **Paper (peer-citable):** Weft: Evidence-Gated Version Control for Autonomous Agent Swarms. Sarkar, P. (2026). Zenodo. [10.5281/zenodo.21882499](https://doi.org/10.5281/zenodo.21882499) —
+  design rationale, related work (optimistic concurrency control, verifiable
+  logs, supply-chain attestation), evaluation across four workloads, and an
+  explicit limitations section. Cite this if you write about Weft.
 - [Protocol specification RFC-0001](https://github.com/spranab/weft/blob/main/rfcs/0001-weft-protocol.md)
-- [Adversarial review log](https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md): 91 findings from five kinds of adversary, each dispositioned
+- [Adversarial review log](https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md): 92 findings from five kinds of adversary, each dispositioned
 - [Multi-agent research paper walkthrough](https://github.com/spranab/weft/blob/main/docs/multi-agent-research-paper.md): includes copy-paste agent prompts
 - [Integrations](https://github.com/spranab/weft/tree/main/integrations): MCP, native Hermes plugin, native OpenClaw plugin
 - [Hosting](https://github.com/spranab/weft/blob/main/HOSTING.md): durable, sandboxed, replicated deployments

@@ -7,6 +7,7 @@
 | **Created** | 2026-08-09 |
 | **Revised** | 2026-08-09 — v0.2 integrated 77 findings from two independent adversarial reviews (GPT-5.6-sol, Qwen 3.8 Max); v0.3 integrates 6 further defects found by implementation testing (`prototype/`: determinism fuzzer 0/300 violations, live 3-agent swarm through a certified gate, cross-OS light-client verification). See [0001-review-log.md](0001-review-log.md) |
 | **Protocol string** | `weft/0.1` |
+| **Paper** | Weft: Evidence-Gated Version Control for Autonomous Agent Swarms — [10.5281/zenodo.21882499](https://doi.org/10.5281/zenodo.21882499) |
 
 ---
 
