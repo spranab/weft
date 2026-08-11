@@ -83,6 +83,17 @@
   .term .r { color: var(--bad); }
   .term .a { color: var(--accent); }
 
+  .receipts { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px,1fr));
+    gap: .5rem; }
+  .rc { display: flex; flex-direction: column; gap: .25rem;
+    background: var(--bg1); border: 1px solid var(--line); border-left: 3px solid var(--ok);
+    border-radius: 8px; padding: .7rem .9rem; }
+  .rc span { font-size: .88rem; color: var(--text); }
+  .rc a { font-size: .82rem; }
+  .strip a { color: inherit; text-decoration: none; display: block; }
+  .strip a:hover b { filter: brightness(1.25); }
+  .strip a:hover span { color: var(--dim); }
+
   .plug-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   @media (max-width: 860px) { .plug-two { grid-template-columns: 1fr; } }
   .plug-h { font-size: .72rem; letter-spacing: .13em; text-transform: uppercase;
@@ -142,6 +153,7 @@
   <span class="spacer"></span>
   <a href="https://demo.weftgate.com">Live demo</a>
   <a href="#demos">Demos</a>
+  <a href="#proof">Proof</a>
   <a href="#uses">Use cases</a>
   <a href="#plug">Integrations</a>
   <a href="#faq">Why not…?</a>
@@ -385,7 +397,8 @@ function copyBlock(btn) {
 <section>
   <h2>What lands, and what bounces</h2>
   <p class="lead">Fifty agents, one hundred tasks, one repository, no branches,
-  no pull requests — the shipped demo, deterministic across runs:</p>
+  no pull requests — the shipped demo, deterministic across runs
+  (<a href="https://github.com/spranab/weft/blob/main/weftd/examples/swarm.rs">source</a>):</p>
   <div class="term">
     <span class="g">✓</span> 82 changes landed across 15 certified landings <span class="c">(7.0s wall)</span><br>
     <span class="g">✓</span> largest batch: <span class="a">40 independent changes in ONE landing</span> <span class="c">(commutation)</span><br>
@@ -415,7 +428,8 @@ function copyBlock(btn) {
     <span class="r">✗</span> paper/findings.md — <span class="a">refused</span><br>
     <span class="c">$ cargo run --release -p weftd --example paper</span>
   </div>
-  <h3 class="plug-h" style="margin-top:1.6rem">What the models actually wrote — verbatim from that run</h3>
+  <h3 class="plug-h" style="margin-top:1.6rem">What the models actually wrote — verbatim from that run
+  (<a href="https://github.com/spranab/weft/blob/main/docs/sample-run.md" style="text-transform:none;letter-spacing:0">full unedited output ↗</a>)</h3>
   <div class="plug-two">
     <div class="term" style="font-size:.76rem;line-height:1.6">
       <span class="c">┌─ paper/background.md   [gpt-5.6-sol]   </span><span class="g">LANDED</span><br>
@@ -630,13 +644,48 @@ function copyBlock(btn) {
   </div>
 </section>
 
+<section id="proof">
+  <h2>Don't take our word for it</h2>
+  <p class="lead">Every claim on this page has a receipt. Here they are, one
+  click each.</p>
+  <div class="receipts">
+    <div class="rc"><span>Fifty agents land concurrently; stale reads, planted
+      bugs and revoked keys bounce</span>
+      <a href="https://github.com/spranab/weft/blob/main/weftd/examples/swarm.rs">swarm.rs — run it yourself ↗</a></div>
+    <div class="rc"><span>Four local models write a paper; the fabricated
+      citation is refused</span>
+      <a href="https://github.com/spranab/weft/blob/main/docs/sample-run.md">a full unedited run ↗</a></div>
+    <div class="rc"><span>Agents wrote real code that reached GitHub as normal
+      commits</span>
+      <a href="https://github.com/spranab/weft-demo/tree/weft-export">the woven branch, with provenance trailers ↗</a></div>
+    <div class="rc"><span>The spec survived five kinds of adversary; every
+      finding dispositioned in public</span>
+      <a href="https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md">the review log — 92 findings ↗</a></div>
+    <div class="rc"><span>A follower converges by verifying, and refuses forged
+      or equivocating landings</span>
+      <a href="https://github.com/spranab/weft/blob/main/weftd/tests/replicate.rs">replicate.rs — the adversarial cases ↗</a></div>
+    <div class="rc"><span>The hub survives crashes; evidence can't reach the
+      network</span>
+      <a href="https://github.com/spranab/weft/blob/main/weftd/tests/persist.rs">persist.rs — reboots, torn tails, sandbox ↗</a></div>
+    <div class="rc"><span>Determinism: any permutation of a change set yields
+      identical bytes</span>
+      <a href="https://github.com/spranab/weft/blob/main/weft-core/tests/protocol.rs">the fuzzer + regression suite ↗</a></div>
+    <div class="rc"><span>The Hermes plugin drives a real gate end to end</span>
+      <a href="https://github.com/spranab/weft/blob/main/integrations/hermes-weft/selftest.py">selftest.py — refusal → delegation → landed ↗</a></div>
+    <div class="rc"><span>Benchmarks are reproducible on your machine</span>
+      <a href="https://github.com/spranab/weft/blob/main/weftd/examples/bench.rs">bench.rs ↗</a></div>
+    <div class="rc"><span>It all builds and passes on Linux and Windows</span>
+      <a href="https://github.com/spranab/weft/actions/workflows/ci.yml">CI, every commit ↗</a></div>
+  </div>
+</section>
+
 <section>
   <div class="strip">
-    <div><b>91</b><span>findings dispositioned</span></div>
-    <div><b>5</b><span>kinds of adversary</span></div>
-    <div><b>~1 ms</b><span>per certified landing</span></div>
-    <div><b>13</b><span>e2e test suites</span></div>
-    <div><b>MIT</b><span>self-hosted</span></div>
+    <div><a href="https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md"><b>92</b><span>findings dispositioned</span></a></div>
+    <div><a href="https://github.com/spranab/weft/blob/main/rfcs/0001-review-log.md"><b>5</b><span>kinds of adversary</span></a></div>
+    <div><a href="https://github.com/spranab/weft/blob/main/weftd/examples/bench.rs"><b>~1 ms</b><span>per certified landing</span></a></div>
+    <div><a href="https://github.com/spranab/weft/actions/workflows/ci.yml"><b>18</b><span>tests, CI on 2 OSes</span></a></div>
+    <div><a href="https://github.com/spranab/weft/blob/main/LICENSE"><b>MIT</b><span>self-hosted</span></a></div>
   </div>
 </section>
 
