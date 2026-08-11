@@ -521,6 +521,18 @@ function copyBlock(btn) {
       re-derives the whole chain itself. Audit prep becomes a URL.</p>
     </div>
     <div class="card">
+      <h3>A paper four agents wrote</h3>
+      <p class="uc-today">Today: several models draft sections, someone
+      pastes them together, and a fabricated citation survives because
+      nobody checked every bracket by hand.</p>
+      <p><b>With Weft:</b> agents write concurrently against a shared
+      reference list; a citation checker runs on the exact bytes and the
+      section citing a source that doesn't exist never lands — while the
+      other three do. Real local models, runnable:
+      <span class="mono">--example paper</span>.
+      <a href="https://github.com/spranab/weft/blob/main/docs/multi-agent-research-paper.md">walkthrough ↗</a></p>
+    </div>
+    <div class="card">
       <h3>Evals with receipts</h3>
       <p class="uc-today">Today: a score lives in a spreadsheet, unlinked
       from the exact artifact version that earned it.</p>
@@ -706,7 +718,11 @@ function copyBlock(btn) {
       or a factuality check is as much evidence as a test suite. Git is the
       import/export format, not the model.</p>
       <p>The real frame: <strong>any artifact whose acceptance can be
-      argued for.</strong> Run
+      argued for.</strong> There is a
+      <a href="https://github.com/spranab/weft/blob/main/docs/multi-agent-research-paper.md">full
+      walkthrough</a> where four local models write a research paper
+      concurrently and the one that fabricates a citation gets refused.
+      Smaller version —
       <span class="mono">cargo run --release -p weftd --example docs</span> —
       three agents write a Markdown handbook concurrently, a doc-linter runs
       as gate evidence, and a <em>judge</em> attests quality with its own key.

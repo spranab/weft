@@ -107,6 +107,20 @@ patches don't overlap anything; planted bugs are isolated by binary-search
 bisection of failing batches; revoked credentials bounce at certification.
 Nobody read a diff.
 
+## Four agents write a research paper
+
+```bash
+ollama serve && cargo run --release -p weftd --example paper
+```
+
+Real local models, working concurrently on one document. A citation checker
+runs as gate evidence on the exact bytes; a judge attests from outside the
+sandbox. One agent fabricates a citation — the way real models do — and
+bisection isolates it: three sections land, that one doesn't.
+
+Full walkthrough, including Hermes agent prompts and a traditional-vs-Weft
+comparison: [docs/multi-agent-research-paper.md](docs/multi-agent-research-paper.md).
+
 ## For AI agents (MCP)
 
 Weft ships an [MCP server](weft-mcp/) — agents connect over the Model Context
