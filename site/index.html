@@ -139,6 +139,7 @@
   <span class="brand">🧵 <span>weft</span></span>
   <span class="spacer"></span>
   <a href="https://demo.weftgate.com">Live demo</a>
+  <a href="#demos">Demos</a>
   <a href="#uses">Use cases</a>
   <a href="#plug">Integrations</a>
   <a href="#faq">Why not…?</a>
@@ -388,6 +389,48 @@ function copyBlock(btn) {
     <span class="r">✗</span> 8/8 planted bugs isolated by binary-search batch bisection<br>
     <span class="r">✗</span> 3/3 revoked-credential attempts refused at certification<br>
     <span class="c">$ cargo run --release -p weftd --example swarm</span>
+  </div>
+</section>
+
+<section id="demos">
+  <h2>The same thing, for prose</h2>
+  <p class="lead">Four agents — real local models via Ollama — write four
+  sections of a research paper concurrently. One fabricates a citation, the
+  way real models do:</p>
+  <div class="term">
+    <span class="c">  agents writing (concurrently)…</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;claude-fable-5 wrote paper/abstract.md<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;gpt-5.6-sol&nbsp;&nbsp;&nbsp;&nbsp;wrote paper/background.md<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;qwen3.8-max&nbsp;&nbsp;&nbsp;&nbsp;wrote paper/method.md<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;local-drafter&nbsp;&nbsp;wrote paper/findings.md<br><br>
+    <span class="r">citation-check: paper/findings.md: citation [9] is not in references.md</span><br>
+    <span class="g">citation-check: ok</span><br><br>
+    <span class="g">✓</span> paper/abstract.md &nbsp;&nbsp;<span class="g">✓</span> paper/background.md<br>
+    <span class="g">✓</span> paper/method.md &nbsp;&nbsp;&nbsp;&nbsp;<span class="g">✓</span> paper/references.md<br>
+    <span class="r">✗</span> paper/findings.md — <span class="a">refused</span><br>
+    <span class="c">$ cargo run --release -p weftd --example paper</span>
+  </div>
+  <p class="plug-note">The citation checker ran on the exact materialized
+  bytes; a judge attested from outside the sandbox; bisection isolated the
+  bad section so the other three still landed. Nothing here is code-shaped —
+  the artifact is Markdown and the evidence is a linter.
+  <a href="https://github.com/spranab/weft/blob/main/docs/multi-agent-research-paper.md">full
+  walkthrough, with Hermes agent prompts ↗</a></p>
+
+  <h3 class="plug-h" style="margin-top:1.8rem">Every demo, one command each</h3>
+  <div class="grid">
+    <div class="card"><h3>swarm</h3><p>50 agents · 100 tasks · one repo · no
+      branches, no PRs. Stale reads, planted bugs and revoked credentials all
+      bounce.<br><span class="mono">--example swarm</span></p></div>
+    <div class="card"><h3>paper</h3><p>Four local models write a research
+      paper; a fabricated citation is refused while the rest lands.<br>
+      <span class="mono">--example paper</span></p></div>
+    <div class="card"><h3>docs</h3><p>A handbook: doc-linter as gate evidence,
+      an editor-judge attesting quality with its own key.<br>
+      <span class="mono">--example docs</span></p></div>
+    <div class="card"><h3>bench</h3><p>Ingest, CRDT materialization, and gate
+      throughput — batched versus contended.<br>
+      <span class="mono">--example bench</span></p></div>
   </div>
 </section>
 
